@@ -8,6 +8,7 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState(''); // Feedback para checar email
@@ -25,7 +26,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      if (isSignUp) {
+      if (isForgotPassword) {
+        // --- RECUPERAÇÃO DE SENHA ---
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
+        if (resetError) throw resetError;
+        setSuccessMessage('Se o e-mail existir, um link de recuperação foi enviado.');
+        setIsForgotPassword(false);
+      } else if (isSignUp) {
         // --- CADASTRO NO SUPABASE ---
         const { error: signUpError } = await supabase.auth.signUp({
           email,
@@ -65,7 +72,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   const toggleMode = () => {
-    setIsSignUp(!isSignUp);
+    if (isForgotPassword) {
+      setIsForgotPassword(false);
+    } else {
+      setIsSignUp(!isSignUp);
+    }
     setError('');
     setSuccessMessage('');
     setEmail('');
@@ -88,10 +99,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <span className="font-bold text-2xl">V</span>
           </div>
           <h1 className="text-2xl font-bold text-white mb-2">
-            {isSignUp ? 'Criar Conta' : 'Bem-vindo de volta'}
+            {isForgotPassword ? 'Recuperar Senha' : isSignUp ? 'Criar Conta' : 'Bem-vindo de volta'}
           </h1>
           <p className="text-sm text-gray-500">
-            {isSignUp ? 'Comece a controlar suas finanças hoje.' : 'Acesse o painel da Vybe Finanças.'}
+            {isForgotPassword ? 'Enviaremos um link para redefinir sua senha.' : isSignUp ? 'Comece a controlar suas finanças hoje.' : 'Acesse o painel da Vybe Finanças.'}
           </p>
         </div>
 
@@ -113,7 +124,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           
           {/* Nome (Apenas Sign Up) */}
-          {isSignUp && (
+          {isSignUp && !isForgotPassword && (
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-400 ml-1">Nome da Empresa</label>
               <div className="relative">
@@ -146,33 +157,35 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
 
           {/* Password */}
-          <div className="space-y-1">
-            <div className="flex justify-between items-center ml-1">
-                <label className="text-xs font-medium text-gray-400">Senha</label>
-                {!isSignUp && (
-                    <button type="button" className="text-[10px] text-vybe-accent hover:text-white transition-colors">Esqueceu a senha?</button>
-                )}
+          {!isForgotPassword && (
+            <div className="space-y-1">
+              <div className="flex justify-between items-center ml-1">
+                  <label className="text-xs font-medium text-gray-400">Senha</label>
+                  {!isSignUp && (
+                      <button type="button" onClick={() => { setIsForgotPassword(true); setError(''); setSuccessMessage(''); }} className="text-[10px] text-vybe-accent hover:text-white transition-colors">Esqueceu a senha?</button>
+                  )}
+              </div>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                  className="w-full bg-[#121212] border border-gray-700 rounded-lg py-3 pl-10 pr-10 text-white placeholder-gray-600 focus:outline-none focus:border-vybe-accent focus:ring-1 focus:ring-vybe-accent transition-all"
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-              <input 
-                type={showPassword ? "text" : "password"} 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                minLength={6}
-                className="w-full bg-[#121212] border border-gray-700 rounded-lg py-3 pl-10 pr-10 text-white placeholder-gray-600 focus:outline-none focus:border-vybe-accent focus:ring-1 focus:ring-vybe-accent transition-all"
-              />
-              <button 
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
+          )}
 
           <button 
             type="submit" 
@@ -183,7 +196,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <Loader2 className="animate-spin" size={20} />
             ) : (
               <>
-                {isSignUp ? 'Criar Conta Grátis' : 'Entrar na Plataforma'}
+                {isForgotPassword ? 'Enviar Link' : isSignUp ? 'Criar Conta Grátis' : 'Entrar na Plataforma'}
                 <ArrowRight size={18} />
               </>
             )}
@@ -193,12 +206,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         {/* Footer / Toggle */}
         <div className="mt-8 pt-6 border-t border-gray-800 text-center">
           <p className="text-sm text-gray-400">
-            {isSignUp ? 'Já tem uma conta?' : 'Ainda não tem conta?'}
+            {isForgotPassword ? 'Lembrou sua senha?' : isSignUp ? 'Já tem uma conta?' : 'Ainda não tem conta?'}
             <button 
               onClick={toggleMode}
+              type="button"
               className="text-white font-bold ml-1 hover:underline focus:outline-none"
             >
-              {isSignUp ? 'Fazer Login' : 'Cadastre-se'}
+              {isForgotPassword ? 'Voltar ao Login' : isSignUp ? 'Fazer Login' : 'Cadastre-se'}
             </button>
           </p>
         </div>
