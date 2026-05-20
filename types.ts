@@ -37,6 +37,9 @@ export interface DashboardSummary {
   totalIncome: number;
   totalExpense: number;
   balance: number;
+  pendingIncome: number;
+  pendingExpense: number;
+  projectedBalance: number;
 }
 
 export interface Client {

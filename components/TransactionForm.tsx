@@ -11,6 +11,7 @@ interface TransactionFormProps {
     description: string;
     amount: number;
     category: Category;
+    clientId?: string;
   } | null;
   clients: Client[];
 }
@@ -36,8 +37,9 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, ini
       setDescription(initialData.description);
       setAmount(initialData.amount.toString());
       setCategory(initialData.category);
+      setClientId(initialData.clientId ?? '');
       setDate(new Date().toISOString().split('T')[0]);
-      setStatus(TransactionStatus.PAID); // Default to paid when coming from quick actions
+      setStatus(TransactionStatus.PAID);
     }
   }, [initialData]);
 

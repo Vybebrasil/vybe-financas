@@ -18,6 +18,7 @@ import Login from './components/Login';
 import { Wallet, TrendingUp, TrendingDown, LayoutDashboard, Users, CreditCard, PieChart, Building2, ChevronDown, Loader2 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './src/services/supabase';
 import { api } from './src/services/api';
+import { formatCurrency } from './utils';
 
 const App: React.FC = () => {
   // --- AUTHENTICATION STATE ---
@@ -31,12 +32,20 @@ const App: React.FC = () => {
 
   // Transaction State
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [preFilledTransaction, setPreFilledTransaction] = useState<{ description: string, amount: number, category: Category } | null>(null);
+  const [preFilledTransaction, setPreFilledTransaction] = useState<{
+    description: string;
+    amount: number;
+    category: Category;
+    clientId?: string;
+  } | null>(null);
 
   const [summary, setSummary] = useState<DashboardSummary>({
     totalIncome: 0,
     totalExpense: 0,
     balance: 0,
+    pendingIncome: 0,
+    pendingExpense: 0,
+    projectedBalance: 0,
   });
 
   // Client State
@@ -176,18 +185,34 @@ const App: React.FC = () => {
   useEffect(() => {
     const newSummary = transactions.reduce(
       (acc, curr) => {
-        if (curr.status !== TransactionStatus.PAID) return acc;
-        if (curr.type === TransactionType.INCOME) {
-          acc.totalIncome += curr.amount;
-          acc.balance += curr.amount;
-        } else {
-          acc.totalExpense += curr.amount;
-          acc.balance -= curr.amount;
+        if (curr.status === TransactionStatus.PAID) {
+          if (curr.type === TransactionType.INCOME) {
+            acc.totalIncome += curr.amount;
+            acc.balance += curr.amount;
+          } else {
+            acc.totalExpense += curr.amount;
+            acc.balance -= curr.amount;
+          }
+        } else if (curr.status === TransactionStatus.PENDING) {
+          if (curr.type === TransactionType.INCOME) {
+            acc.pendingIncome += curr.amount;
+          } else {
+            acc.pendingExpense += curr.amount;
+          }
         }
         return acc;
       },
-      { totalIncome: 0, totalExpense: 0, balance: 0 }
+      {
+        totalIncome: 0,
+        totalExpense: 0,
+        balance: 0,
+        pendingIncome: 0,
+        pendingExpense: 0,
+        projectedBalance: 0,
+      }
     );
+    newSummary.projectedBalance =
+      newSummary.balance + newSummary.pendingIncome - newSummary.pendingExpense;
     setSummary(newSummary);
   }, [transactions]);
 
@@ -375,7 +400,8 @@ const App: React.FC = () => {
     setPreFilledTransaction({
       description: `Mensalidade - ${client.name}`,
       amount: client.monthlyFee,
-      category: Category.CLIENT_PAYMENT
+      category: Category.CLIENT_PAYMENT,
+      clientId: client.id,
     });
     setActiveTab('finance');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -648,18 +674,25 @@ DB_NAME=vybe_financas_dev`}
                 value={summary.totalIncome}
                 type="income"
                 icon={<TrendingUp size={20} />}
+                pendingValue={summary.pendingIncome}
               />
               <DashboardCard
                 title="Saídas"
                 value={summary.totalExpense}
                 type="expense"
                 icon={<TrendingDown size={20} />}
+                pendingValue={summary.pendingExpense}
               />
               <DashboardCard
                 title="Saldo Atual"
                 value={summary.balance}
                 type="balance"
                 icon={<Wallet size={20} />}
+                pendingHint={
+                  summary.pendingIncome > 0 || summary.pendingExpense > 0
+                    ? `Projetado (c/ pendentes): ${formatCurrency(summary.projectedBalance)}`
+                    : undefined
+                }
               />
             </section>
 
