@@ -188,12 +188,20 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, clients
                 return (
                   <tr
                     key={transaction.id}
-                    className="border-b border-gray-800 hover:bg-[#252525] transition-colors group"
+                    className={`border-b border-gray-800 hover:bg-[#252525] transition-colors group ${transaction.status === TransactionStatus.PENDING ? 'bg-amber-500/[0.03]' : ''}`}
                   >
                     <td className="p-4 align-top md:align-middle">
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-white truncate max-w-[150px] sm:max-w-[200px] md:max-w-xs" title={transaction.description}>
+                          {transaction.status === TransactionStatus.PENDING && (
+                            <span
+                              className="shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400"
+                              title="Pendente"
+                            >
+                              <Clock size={12} />
+                            </span>
+                          )}
+                          <span className={`font-medium truncate max-w-[150px] sm:max-w-[200px] md:max-w-xs ${transaction.status === TransactionStatus.PENDING ? 'text-amber-100' : 'text-white'}`} title={transaction.description}>
                             {transaction.description}
                           </span>
                         </div>

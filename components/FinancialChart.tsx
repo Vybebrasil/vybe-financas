@@ -1,8 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, ChartPeriod } from '../types';
 import { getChartData, formatCurrency } from '../utils';
-import { BarChart3, Calendar, Clock, Layers, PieChart, ChevronLeft, ChevronRight } from 'lucide-react';
-
+import { Calendar, Clock, Layers, PieChart, ChevronLeft, ChevronRight } from 'lucide-react';
 interface FinancialChartProps {
   transactions: Transaction[];
 }
@@ -14,10 +13,11 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
 
   const data = useMemo(() => getChartData(transactions, period, selectedYear), [transactions, period, selectedYear]);
 
-  // Find the maximum value to calculate bar height percentages
   const maxValue = Math.max(
-    ...data.map((d) => Math.max(d.income, d.expense)),
-    1 // Prevent division by zero
+    ...data.map((d) =>
+      Math.max(d.income, d.expense, d.pendingIncome, d.pendingExpense)
+    ),
+    1
   );
 
   const tabs: { id: ChartPeriod; label: string; icon: React.ReactNode }[] = [
@@ -57,14 +57,28 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-4 text-xs font-medium mb-4">
+      <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-xs font-medium mb-4">
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-md bg-vybe-green shadow-[0_0_8px_rgba(16,185,129,0.4)]"></span>
-          <span className="text-gray-400">Entradas</span>
+          <span className="text-gray-400">Entradas (pagas)</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-3 h-3 rounded-md bg-vybe-red shadow-[0_0_8px_rgba(239,68,68,0.4)]"></span>
-          <span className="text-gray-400">Saídas</span>
+          <span className="text-gray-400">Saídas (pagas)</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded-md bg-amber-400/90 border border-amber-300/50"></span>
+          <span className="text-gray-400 flex items-center gap-1">
+            <Clock size={12} className="text-amber-400" />
+            Entrada pendente
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded-md bg-amber-600/90 border border-amber-500/50"></span>
+          <span className="text-gray-400 flex items-center gap-1">
+            <Clock size={12} className="text-amber-500" />
+            Saída pendente
+          </span>
         </div>
       </div>
 
@@ -87,36 +101,55 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
           data.map((item, index) => {
             const incomeHeight = (item.income / maxValue) * 100;
             const expenseHeight = (item.expense / maxValue) * 100;
+            const pendingIncomeHeight = (item.pendingIncome / maxValue) * 100;
+            const pendingExpenseHeight = (item.pendingExpense / maxValue) * 100;
 
             return (
-              <div key={item.key} className="flex-1 flex flex-col items-center justify-end h-full group min-w-[30px]">
+              <div key={item.key} className="flex-1 flex flex-col items-center justify-end h-full group min-w-[40px]">
                 {/* Bar Wrapper */}
-                <div className="w-full flex justify-center items-end gap-1 md:gap-2 h-full relative px-1">
+                <div className="w-full flex justify-center items-end gap-0.5 md:gap-1 h-full relative px-0.5">
                   
                   {/* Tooltip Overlay */}
                   <div className="absolute bottom-full mb-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[#252525] border border-gray-700 text-white text-xs rounded-lg p-3 whitespace-nowrap z-20 pointer-events-none shadow-2xl transform translate-y-2 group-hover:translate-y-0">
                     <p className="font-bold mb-2 pb-1 border-b border-gray-700">{item.label}</p>
                     <div className="flex items-center justify-between gap-4 mb-1">
-                        <span className="text-gray-400">Entrada:</span>
+                        <span className="text-gray-400">Entrada (paga):</span>
                         <span className="text-vybe-green font-mono">{formatCurrency(item.income)}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-4">
-                        <span className="text-gray-400">Saída:</span>
+                    <div className="flex items-center justify-between gap-4 mb-1">
+                        <span className="text-gray-400 flex items-center gap-1"><Clock size={10} className="text-amber-400" /> Ent. pendente:</span>
+                        <span className="text-amber-400 font-mono">{formatCurrency(item.pendingIncome)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 mb-1">
+                        <span className="text-gray-400">Saída (paga):</span>
                         <span className="text-vybe-red font-mono">{formatCurrency(item.expense)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                        <span className="text-gray-400 flex items-center gap-1"><Clock size={10} className="text-amber-500" /> Saída pendente:</span>
+                        <span className="text-amber-500 font-mono">{formatCurrency(item.pendingExpense)}</span>
                     </div>
                   </div>
 
-                  {/* Income Bar */}
-                  <div 
-                    style={{ height: `${incomeHeight}%`, animationDelay: `${index * 50}ms` }} 
-                    className="flex-1 max-w-[40px] bg-vybe-green hover:bg-emerald-400 hover:shadow-[0_0_15px_rgba(16,185,129,0.5)] rounded-t-sm transition-all duration-300 relative origin-bottom animate-bar-grow opacity-90 hover:opacity-100"
-                  ></div>
-                  
-                  {/* Expense Bar */}
-                  <div 
-                    style={{ height: `${expenseHeight}%`, animationDelay: `${index * 50 + 25}ms` }} 
-                    className="flex-1 max-w-[40px] bg-vybe-red hover:bg-rose-400 hover:shadow-[0_0_15px_rgba(239,68,68,0.5)] rounded-t-sm transition-all duration-300 relative origin-bottom animate-bar-grow opacity-90 hover:opacity-100"
-                  ></div>
+                  <div
+                    style={{ height: `${incomeHeight}%`, animationDelay: `${index * 50}ms` }}
+                    className="flex-1 max-w-[28px] bg-vybe-green hover:bg-emerald-400 rounded-t-sm transition-all duration-300 origin-bottom animate-bar-grow opacity-90 hover:opacity-100"
+                    title="Entrada paga"
+                  />
+                  <div
+                    style={{ height: `${pendingIncomeHeight}%`, animationDelay: `${index * 50 + 12}ms` }}
+                    className={`flex-1 max-w-[28px] bg-amber-400/85 border border-amber-300/40 rounded-t-sm transition-all duration-300 origin-bottom animate-bar-grow ${item.pendingIncome > 0 ? 'opacity-90' : 'opacity-0'}`}
+                    title="Entrada pendente"
+                  />
+                  <div
+                    style={{ height: `${expenseHeight}%`, animationDelay: `${index * 50 + 25}ms` }}
+                    className="flex-1 max-w-[28px] bg-vybe-red hover:bg-rose-400 rounded-t-sm transition-all duration-300 origin-bottom animate-bar-grow opacity-90 hover:opacity-100"
+                    title="Saída paga"
+                  />
+                  <div
+                    style={{ height: `${pendingExpenseHeight}%`, animationDelay: `${index * 50 + 37}ms` }}
+                    className={`flex-1 max-w-[28px] bg-amber-600/85 border border-amber-500/40 rounded-t-sm transition-all duration-300 origin-bottom animate-bar-grow ${item.pendingExpense > 0 ? 'opacity-90' : 'opacity-0'}`}
+                    title="Saída pendente"
+                  />
                 </div>
 
                 {/* X-Axis Label */}

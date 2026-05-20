@@ -79,6 +79,8 @@ export interface ChartDataPoint {
   key: string;
   income: number;
   expense: number;
+  pendingIncome: number;
+  pendingExpense: number;
 }
 
 export interface CompanySettings {

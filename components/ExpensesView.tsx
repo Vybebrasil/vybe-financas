@@ -45,6 +45,8 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   // Subscription History State
   const [viewingHistorySub, setViewingHistorySub] = useState<Subscription | null>(null);
 
+  const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
+
   const [supplyDesc, setSupplyDesc] = useState('');
   const [supplyCost, setSupplyCost] = useState('');
 
@@ -64,6 +66,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
     setNewEmpRole('');
     setNewEmpSalary('');
     setNewEmpPix('');
+    setIsAddEmployeeOpen(false);
   };
 
   const handleSubSubmit = (e: React.FormEvent) => {
@@ -166,6 +169,40 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
         transactions={transactions}
       />
 
+      {/* Modal: Novo Colaborador */}
+      {isAddEmployeeOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setIsAddEmployeeOpen(false)}
+          />
+          <div className="relative bg-vybe-card border border-gray-700 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-bar-grow origin-center">
+            <div className="bg-[#2A2A2A] p-4 flex justify-between items-center border-b border-gray-700">
+              <h3 className="text-white font-bold flex items-center gap-2">
+                <Plus className="text-vybe-accent" size={20} />
+                Novo Colaborador
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsAddEmployeeOpen(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleAddEmployee} className="p-6 space-y-3">
+              <input value={newEmpName} onChange={e => setNewEmpName(e.target.value)} placeholder="Nome Completo" className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none" required />
+              <input value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)} placeholder="Cargo" className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none" />
+              <input type="number" value={newEmpSalary} onChange={e => setNewEmpSalary(e.target.value)} placeholder="Salário (R$)" className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none" required />
+              <input value={newEmpPix} onChange={e => setNewEmpPix(e.target.value)} placeholder="Chave PIX" className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none" />
+              <button type="submit" className="w-full bg-vybe-accent hover:bg-[#E65C00] text-white font-bold py-3 rounded-lg text-sm transition-colors mt-2">
+                Cadastrar
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* SECTION 1: EMPLOYEES */}
       <section className="bg-vybe-card border border-gray-800 rounded-xl p-6 shadow-lg">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -176,29 +213,23 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
             </h2>
             <p className="text-xs text-gray-500 mt-1">Gestão de equipe e pagamentos</p>
           </div>
-          <div className="bg-[#121212] px-4 py-2 rounded-lg border border-gray-700">
-            <span className="text-xs text-gray-400 block">Custo Mensal Estimado</span>
-            <span className="text-lg font-bold text-white">{formatCurrency(totalSalaries)}</span>
+          <div className="flex items-center gap-3">
+            <div className="bg-[#121212] px-4 py-2 rounded-lg border border-gray-700">
+              <span className="text-xs text-gray-400 block">Custo Mensal Estimado</span>
+              <span className="text-lg font-bold text-white">{formatCurrency(totalSalaries)}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsAddEmployeeOpen(true)}
+              title="Novo colaborador"
+              className="p-3 bg-vybe-accent hover:bg-[#E65C00] text-white rounded-full transition-colors shadow-lg shadow-orange-900/30"
+            >
+              <Plus size={22} />
+            </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Add Form */}
-          <div className="lg:col-span-1 bg-[#121212] p-4 rounded-lg border border-gray-800 h-fit">
-            <h3 className="text-sm font-bold text-gray-300 mb-4 flex items-center gap-2">
-              <Plus size={16} /> Novo Colaborador
-            </h3>
-            <form onSubmit={handleAddEmployee} className="space-y-3">
-              <input value={newEmpName} onChange={e => setNewEmpName(e.target.value)} placeholder="Nome Completo" className="w-full bg-vybe-card border border-gray-700 rounded p-2 text-sm text-white focus:border-vybe-accent outline-none" required />
-              <input value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)} placeholder="Cargo" className="w-full bg-vybe-card border border-gray-700 rounded p-2 text-sm text-white focus:border-vybe-accent outline-none" />
-              <input type="number" value={newEmpSalary} onChange={e => setNewEmpSalary(e.target.value)} placeholder="Salário (R$)" className="w-full bg-vybe-card border border-gray-700 rounded p-2 text-sm text-white focus:border-vybe-accent outline-none" required />
-              <input value={newEmpPix} onChange={e => setNewEmpPix(e.target.value)} placeholder="Chave PIX" className="w-full bg-vybe-card border border-gray-700 rounded p-2 text-sm text-white focus:border-vybe-accent outline-none" />
-              <button type="submit" className="w-full bg-vybe-accent hover:bg-[#E65C00] text-white font-bold py-2 rounded text-sm transition-colors">Cadastrar</button>
-            </form>
-          </div>
-
-          {/* List */}
-          <div className="lg:col-span-2 space-y-3">
+        <div className="space-y-3">
             {employees.length === 0 && <p className="text-gray-500 text-sm italic">Nenhum funcionário cadastrado.</p>}
             {employees.map(emp => (
               <div key={emp.id} className="flex flex-col md:flex-row justify-between items-center bg-[#121212] p-4 rounded-lg border border-gray-800 hover:border-gray-600 transition-colors">
@@ -232,7 +263,6 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                 </div>
               </div>
             ))}
-          </div>
         </div>
       </section>
 

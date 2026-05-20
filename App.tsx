@@ -176,6 +176,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const newSummary = transactions.reduce(
       (acc, curr) => {
+        if (curr.status !== TransactionStatus.PAID) return acc;
         if (curr.type === TransactionType.INCOME) {
           acc.totalIncome += curr.amount;
           acc.balance += curr.amount;

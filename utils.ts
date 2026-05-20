@@ -1,4 +1,24 @@
-import { Transaction, TransactionType, Client, ChartDataPoint, ChartPeriod } from './types';
+import { Transaction, TransactionType, TransactionStatus, Client, ChartDataPoint, ChartPeriod } from './types';
+
+const addToChartPoint = (point: ChartDataPoint, t: Transaction) => {
+  const isPaid = t.status === TransactionStatus.PAID;
+  if (t.type === TransactionType.INCOME) {
+    if (isPaid) point.income += t.amount;
+    else point.pendingIncome += t.amount;
+  } else {
+    if (isPaid) point.expense += t.amount;
+    else point.pendingExpense += t.amount;
+  }
+};
+
+const emptyChartPoint = (label: string, key: string): ChartDataPoint => ({
+  label,
+  key,
+  income: 0,
+  expense: 0,
+  pendingIncome: 0,
+  pendingExpense: 0,
+});
 
 export const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('pt-BR', {
@@ -46,20 +66,12 @@ export const getChartData = (transactions: Transaction[], period: ChartPeriod, t
       const monthStr = String(d.getMonth() + 1).padStart(2, '0');
       const dateKey = `${d.getFullYear()}-${monthStr}-${dayStr}`; // YYYY-MM-DD
       
-      data.push({
-        label: `${dayStr}/${monthStr}`,
-        key: dateKey,
-        income: 0,
-        expense: 0
-      });
+      data.push(emptyChartPoint(`${dayStr}/${monthStr}`, dateKey));
     }
 
     transactions.forEach(t => {
-      const point = data.find(p => p.key === t.date); // t.date is YYYY-MM-DD
-      if (point) {
-        if (t.type === TransactionType.INCOME) point.income += t.amount;
-        else point.expense += t.amount;
-      }
+      const point = data.find(p => p.key === t.date);
+      if (point) addToChartPoint(point, t);
     });
 
   } else if (period === 'monthly') {
@@ -70,26 +82,14 @@ export const getChartData = (transactions: Transaction[], period: ChartPeriod, t
       const monthStr = String(i + 1).padStart(2, '0');
       const key = `${targetYear}-${monthStr}`; // Format: YYYY-MM
 
-      data.push({
-        label: monthNames[i],
-        key: key,
-        income: 0,
-        expense: 0
-      });
+      data.push(emptyChartPoint(monthNames[i], key));
     }
 
     transactions.forEach(t => {
-      // t.date format is YYYY-MM-DD
       const tYear = parseInt(t.date.split('-')[0]);
-      const tMonth = t.date.substring(0, 7); // YYYY-MM
-
-      // Filter primarily by the key (YYYY-MM)
+      const tMonth = t.date.substring(0, 7);
       const point = data.find(p => p.key === tMonth);
-      
-      if (point && tYear === targetYear) {
-        if (t.type === TransactionType.INCOME) point.income += t.amount;
-        else point.expense += t.amount;
-      }
+      if (point && tYear === targetYear) addToChartPoint(point, t);
     });
 
   } else if (period === 'yearly') {
@@ -103,37 +103,19 @@ export const getChartData = (transactions: Transaction[], period: ChartPeriod, t
     const sortedYears = Array.from(years).sort();
 
     sortedYears.forEach(year => {
-      data.push({
-        label: year,
-        key: year,
-        income: 0,
-        expense: 0
-      });
+      data.push(emptyChartPoint(year, year));
     });
 
     transactions.forEach(t => {
       const tYear = t.date.substring(0, 4);
       const point = data.find(p => p.key === tYear);
-      if (point) {
-        if (t.type === TransactionType.INCOME) point.income += t.amount;
-        else point.expense += t.amount;
-      }
+      if (point) addToChartPoint(point, t);
     });
 
   } else if (period === 'total') {
     // Single Total Bar
-    const totalPoint = {
-      label: 'Total Geral',
-      key: 'total',
-      income: 0,
-      expense: 0
-    };
-
-    transactions.forEach(t => {
-      if (t.type === TransactionType.INCOME) totalPoint.income += t.amount;
-      else totalPoint.expense += t.amount;
-    });
-
+    const totalPoint = emptyChartPoint('Total Geral', 'total');
+    transactions.forEach(t => addToChartPoint(totalPoint, t));
     data.push(totalPoint);
   }
 
