@@ -35,7 +35,7 @@ const DelinquencyPanel: React.FC<DelinquencyPanelProps> = ({
               {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
             </h2>
             <p className="text-xs text-gray-500 mt-1">
-              Clientes ativos com mensalidade em aberto neste mês
+              Lançamentos pendentes de mensalidade neste mês (já gerados no Financeiro)
             </p>
           </div>
           <div className="flex gap-4 text-sm">

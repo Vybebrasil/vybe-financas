@@ -16,10 +16,32 @@ const client: Client = {
 };
 
 describe('delinquency', () => {
-  it('marca inadimplente quando passou do vencimento sem pagamento', () => {
+  it('sem lançamento no mês não marca overdue (só com transação PENDING)', () => {
     const snapshot = getClientBillingSnapshot(
       client,
       [],
+      '2026-05',
+      '2026-05-20',
+    );
+    expect(snapshot.status).toBe('missing_launch');
+  });
+
+  it('marca inadimplente quando há PENDING e passou do vencimento', () => {
+    const snapshot = getClientBillingSnapshot(
+      client,
+      [
+        {
+          id: 't1',
+          description: 'Mensalidade - Empresa X',
+          amount: 2000,
+          type: TransactionType.INCOME,
+          category: Category.CLIENT_PAYMENT,
+          date: '2026-05-05',
+          status: TransactionStatus.PENDING,
+          clientId: 'c1',
+          paymentMethod: 'PIX',
+        },
+      ],
       '2026-05',
       '2026-05-20',
     );

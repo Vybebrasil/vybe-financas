@@ -1,7 +1,13 @@
 import { Client, Transaction, TransactionType, TransactionStatus, Category } from '../../types';
 import { dateInMonth, getCurrentMonthKey, todayIsoDate } from './recurringLogic';
 
-export type ClientBillingStatus = 'paid' | 'pending' | 'overdue' | 'upcoming' | 'no_charge';
+export type ClientBillingStatus =
+  | 'paid'
+  | 'pending'
+  | 'overdue'
+  | 'upcoming'
+  | 'missing_launch'
+  | 'no_charge';
 
 export interface ClientBillingSnapshot {
   client: Client;
@@ -48,11 +54,9 @@ export function getClientBillingSnapshot(
       );
     }
   } else if (client.contractStatus === 'Ativo') {
+    // Sem lançamento no mês: não entra na régua (overdue/pending exigem transação PENDING).
     if (today > dueDate) {
-      status = 'overdue';
-      daysOverdue = Math.floor(
-        (new Date(today).getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24),
-      );
+      status = 'missing_launch';
     } else {
       status = 'upcoming';
     }
