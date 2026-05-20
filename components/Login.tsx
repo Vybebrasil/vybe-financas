@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Lock, ArrowRight, Loader2, AlertCircle, Eye, EyeOff, CheckCircle } from 'lucide-react';
-import { supabase } from '../src/services/supabase'; // Importação do serviço real
+import { supabase, supabaseUrl } from '../src/services/supabase'; // Importação do serviço real
 
 interface LoginProps {
   onLogin: () => void;
@@ -65,6 +65,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       let msg = err.message;
       if (msg.includes('Invalid login credentials')) msg = 'Email ou senha incorretos.';
       if (msg.includes('User already registered')) msg = 'Este email já está cadastrado.';
+      if (msg === 'TypeError: Failed to fetch' || msg === 'Failed to fetch') {
+        msg = `Erro de conexão (Failed to fetch). Verifique se a URL do Supabase é válida e acessível. URL configurada: "${supabaseUrl || 'Não definida'}". Se estiver apontando para localhost, você precisa configurar a URL real do seu projeto Supabase no painel da Vercel (VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY).`;
+      }
       setError(msg);
     } finally {
       setLoading(false);
