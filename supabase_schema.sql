@@ -13,8 +13,24 @@ CREATE TABLE IF NOT EXISTS transactions (
   status TEXT NOT NULL,
   client_id UUID,
   payment_method TEXT,
-  receipt_url TEXT
+  receipt_url TEXT,
+  bank_account_id UUID
 );
+
+-- Contas bancárias
+CREATE TABLE IF NOT EXISTS bank_accounts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  institution TEXT DEFAULT '',
+  initial_balance NUMERIC DEFAULT 0,
+  is_default BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- FK opcional (se a coluna já existir sem FK):
+-- ALTER TABLE transactions ADD CONSTRAINT transactions_bank_account_fkey
+--   FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id) ON DELETE SET NULL;
 
 -- Clients
 CREATE TABLE IF NOT EXISTS clients (
@@ -28,8 +44,12 @@ CREATE TABLE IF NOT EXISTS clients (
   active_plan TEXT,
   monthly_fee NUMERIC,
   due_day INTEGER,
-  contract_status TEXT
+  contract_status TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Se a tabela já existir:
+-- ALTER TABLE clients ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Employees
 CREATE TABLE IF NOT EXISTS employees (
@@ -54,11 +74,47 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   active BOOLEAN DEFAULT true
 );
 
+-- Configurações da empresa (substitui user_metadata para planos/templates)
+CREATE TABLE IF NOT EXISTS company_settings (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL DEFAULT 'Minha Agência',
+  cnpj TEXT DEFAULT '',
+  logo_url TEXT,
+  email TEXT,
+  phone TEXT,
+  address TEXT,
+  service_plans JSONB DEFAULT '[]'::jsonb,
+  message_templates JSONB DEFAULT '[]'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE company_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "company_settings_own" ON company_settings;
+CREATE POLICY "company_settings_own" ON company_settings
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- Log de geração de recorrência mensal (cliente + Edge Function)
+CREATE TABLE IF NOT EXISTS recurring_generation_log (
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  month_key TEXT NOT NULL,
+  transactions_count INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (user_id, month_key)
+);
+
+ALTER TABLE recurring_generation_log ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "recurring_log_own" ON recurring_generation_log;
+CREATE POLICY "recurring_log_own" ON recurring_generation_log
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
 -- RLS
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bank_accounts ENABLE ROW LEVEL SECURITY;
 
 -- Policies (per authenticated user)
 DROP POLICY IF EXISTS "transactions_own" ON transactions;
@@ -77,7 +133,11 @@ DROP POLICY IF EXISTS "subscriptions_own" ON subscriptions;
 CREATE POLICY "subscriptions_own" ON subscriptions
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- Storage buckets
+DROP POLICY IF EXISTS "bank_accounts_own" ON bank_accounts;
+CREATE POLICY "bank_accounts_own" ON bank_accounts
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- Storage buckets (públicos para URL direta; arquivos em pasta por usuário)
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('receipts', 'receipts', true)
 ON CONFLICT (id) DO NOTHING;
@@ -86,16 +146,29 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('logos', 'logos', true)
 ON CONFLICT (id) DO NOTHING;
 
+-- Políticas: cada usuário só acessa arquivos em storage.objects.name começando com seu user_id/
 DROP POLICY IF EXISTS "receipts_select" ON storage.objects;
 DROP POLICY IF EXISTS "receipts_insert" ON storage.objects;
-CREATE POLICY "receipts_select" ON storage.objects FOR SELECT USING (bucket_id = 'receipts');
-CREATE POLICY "receipts_insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'receipts');
+DROP POLICY IF EXISTS "receipts_update" ON storage.objects;
+DROP POLICY IF EXISTS "receipts_delete" ON storage.objects;
+CREATE POLICY "receipts_select" ON storage.objects FOR SELECT
+  USING (bucket_id = 'receipts' AND (storage.foldername(name))[1] = auth.uid()::text);
+CREATE POLICY "receipts_insert" ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'receipts' AND (storage.foldername(name))[1] = auth.uid()::text);
+CREATE POLICY "receipts_update" ON storage.objects FOR UPDATE
+  USING (bucket_id = 'receipts' AND (storage.foldername(name))[1] = auth.uid()::text);
+CREATE POLICY "receipts_delete" ON storage.objects FOR DELETE
+  USING (bucket_id = 'receipts' AND (storage.foldername(name))[1] = auth.uid()::text);
 
 DROP POLICY IF EXISTS "logos_select" ON storage.objects;
 DROP POLICY IF EXISTS "logos_insert" ON storage.objects;
 DROP POLICY IF EXISTS "logos_update" ON storage.objects;
 DROP POLICY IF EXISTS "logos_delete" ON storage.objects;
-CREATE POLICY "logos_select" ON storage.objects FOR SELECT USING (bucket_id = 'logos');
-CREATE POLICY "logos_insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'logos');
-CREATE POLICY "logos_update" ON storage.objects FOR UPDATE USING (bucket_id = 'logos');
-CREATE POLICY "logos_delete" ON storage.objects FOR DELETE USING (bucket_id = 'logos');
+CREATE POLICY "logos_select" ON storage.objects FOR SELECT
+  USING (bucket_id = 'logos' AND (storage.foldername(name))[1] = auth.uid()::text);
+CREATE POLICY "logos_insert" ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'logos' AND (storage.foldername(name))[1] = auth.uid()::text);
+CREATE POLICY "logos_update" ON storage.objects FOR UPDATE
+  USING (bucket_id = 'logos' AND (storage.foldername(name))[1] = auth.uid()::text);
+CREATE POLICY "logos_delete" ON storage.objects FOR DELETE
+  USING (bucket_id = 'logos' AND (storage.foldername(name))[1] = auth.uid()::text);

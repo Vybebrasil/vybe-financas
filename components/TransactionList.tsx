@@ -1,21 +1,32 @@
 import React, { useState, useMemo } from 'react';
-import { Transaction, TransactionType, Category, Client, PaymentMethod, TransactionStatus } from '../types';
+import { Transaction, TransactionType, Category, Client, PaymentMethod, TransactionStatus, BankAccount } from '../types';
 import { formatCurrency, formatDate } from '../utils';
-import { Trash2, TrendingUp, TrendingDown, Calendar, Tag, Filter, XCircle, FileText, Briefcase, Building2, QrCode, CreditCard, Barcode, Banknote, HelpCircle, CheckCircle, Clock, Paperclip } from 'lucide-react';
+import { Trash2, TrendingUp, TrendingDown, Calendar, Tag, Filter, XCircle, FileText, Briefcase, Building2, QrCode, CreditCard, Barcode, Banknote, CheckCircle, Clock, Paperclip, Pencil } from 'lucide-react';
 
 interface TransactionListProps {
   transactions: Transaction[];
   clients: Client[];
+  bankAccounts?: BankAccount[];
   onDeleteTransaction: (id: string) => void;
+  onEditTransaction?: (transaction: Transaction) => void;
   onGenerateReceipt?: (transaction: Transaction) => void;
   onToggleStatus: (id: string) => void;
 }
 
-const TransactionList: React.FC<TransactionListProps> = ({ transactions, clients, onDeleteTransaction, onGenerateReceipt, onToggleStatus }) => {
+const TransactionList: React.FC<TransactionListProps> = ({
+  transactions,
+  clients,
+  bankAccounts = [],
+  onDeleteTransaction,
+  onEditTransaction,
+  onGenerateReceipt,
+  onToggleStatus,
+}) => {
   // Inicializar com a data atual
   const [filterMonth, setFilterMonth] = useState<string>(String(new Date().getMonth()));
   const [filterYear, setFilterYear] = useState<string>(String(new Date().getFullYear()));
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterBankAccount, setFilterBankAccount] = useState<string>('all');
 
   // Gerar lista de anos disponíveis baseada nas transações + ano atual
   const availableYears = useMemo(() => {
@@ -48,18 +59,26 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, clients
       // tMonth vem como "01", "10". Convertemos para index (0-11) para comparar
       const matchMonth = filterMonth === 'all' || String(parseInt(tMonth) - 1) === filterMonth;
       const matchCategory = filterCategory === 'all' || t.category === filterCategory;
+      const matchBank =
+        filterBankAccount === 'all' ||
+        (filterBankAccount === 'none' ? !t.bankAccountId : t.bankAccountId === filterBankAccount);
 
-      return matchYear && matchMonth && matchCategory;
+      return matchYear && matchMonth && matchCategory && matchBank;
     });
-  }, [transactions, filterYear, filterMonth, filterCategory]);
+  }, [transactions, filterYear, filterMonth, filterCategory, filterBankAccount]);
 
   const clearFilters = () => {
     setFilterMonth('all');
     setFilterYear('all');
     setFilterCategory('all');
+    setFilterBankAccount('all');
   };
 
-  const hasActiveFilters = filterMonth !== 'all' || filterYear !== 'all' || filterCategory !== 'all';
+  const hasActiveFilters =
+    filterMonth !== 'all' ||
+    filterYear !== 'all' ||
+    filterCategory !== 'all' ||
+    filterBankAccount !== 'all';
 
   const getPaymentIcon = (method?: PaymentMethod) => {
     switch (method) {
@@ -135,13 +154,27 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, clients
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
-                className="bg-transparent text-xs text-white p-2 outline-none cursor-pointer"
+                className="bg-transparent text-xs text-white p-2 outline-none cursor-pointer border-r border-gray-700"
               >
                 <option value="all">Todas as Categorias</option>
                 {Object.values(Category).map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
+
+              {bankAccounts.length > 0 && (
+                <select
+                  value={filterBankAccount}
+                  onChange={(e) => setFilterBankAccount(e.target.value)}
+                  className="bg-transparent text-xs text-white p-2 outline-none cursor-pointer"
+                >
+                  <option value="all">Todas as contas</option>
+                  <option value="none">Sem conta</option>
+                  {bankAccounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {hasActiveFilters && (
@@ -313,6 +346,16 @@ const TransactionList: React.FC<TransactionListProps> = ({ transactions, clients
                           </a>
                         )}
 
+                        {onEditTransaction && (
+                          <button
+                            type="button"
+                            onClick={() => onEditTransaction(transaction)}
+                            className="p-1.5 md:p-2 text-gray-400 hover:text-white hover:bg-gray-700 bg-gray-800 rounded-lg transition-all"
+                            title="Editar transação"
+                          >
+                            <Pencil size={16} />
+                          </button>
+                        )}
                         {onGenerateReceipt && (
                           <button
                             onClick={() => onGenerateReceipt(transaction)}

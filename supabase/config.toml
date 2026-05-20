@@ -1,0 +1,9 @@
+# Vybe Finanças — Supabase local/config mínimo para deploy de Edge Functions
+
+project_id = "nmqpfvfusyqenexckkvr"
+
+[api]
+enabled = true
+
+[functions.monthly-recurring]
+verify_jwt = false

@@ -29,8 +29,17 @@ export interface Transaction {
   date: string;
   status: TransactionStatus;
   clientId?: string; // Centro de Custo / Cliente vinculado
-  paymentMethod: PaymentMethod; // Novo campo
-  receiptUrl?: string; // Comprovante
+  bankAccountId?: string;
+  paymentMethod: PaymentMethod;
+  receiptUrl?: string;
+}
+
+export interface BankAccount {
+  id: string;
+  name: string;
+  institution: string;
+  initialBalance: number;
+  isDefault: boolean;
 }
 
 export interface DashboardSummary {
@@ -53,6 +62,7 @@ export interface Client {
   monthlyFee: number;
   dueDay: number;
   contractStatus: 'Ativo' | 'Pendente' | 'Cancelado';
+  createdAt?: string;
 }
 
 export interface Employee {
@@ -86,6 +96,28 @@ export interface ChartDataPoint {
   pendingExpense: number;
 }
 
+export type MessageChannel = 'whatsapp' | 'email';
+
+export type BillingStage = 'pre_due' | 'on_due' | 'overdue' | 'custom';
+
+export interface MessageTemplate {
+  id: string;
+  name: string;
+  channel: MessageChannel;
+  stage: BillingStage;
+  subject?: string;
+  body: string;
+}
+
+export interface TemplateContext {
+  contactPerson: string;
+  clientName: string;
+  activePlan: string;
+  amount: string;
+  dueDay: string;
+  companyName: string;
+}
+
 export interface CompanySettings {
   name: string;
   cnpj: string;
@@ -93,4 +125,6 @@ export interface CompanySettings {
   email?: string;
   phone?: string;
   address?: string;
+  plans?: string[];
+  messageTemplates?: MessageTemplate[];
 }

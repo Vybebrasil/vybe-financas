@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Client, Transaction, TransactionType } from '../types';
 import { formatCurrency, formatDate } from '../utils';
-import { X, History, TrendingUp, TrendingDown, FileText } from 'lucide-react';
+import { X, History, TrendingUp, TrendingDown, FileText, Gem } from 'lucide-react';
 
 interface ClientHistoryModalProps {
   isOpen: boolean;
@@ -13,27 +13,46 @@ interface ClientHistoryModalProps {
 const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose, client, transactions }) => {
   if (!isOpen || !client) return null;
 
-  // Filter transactions where description contains client name (case insensitive)
   const clientTransactions = useMemo(() => {
     const term = client.name.toLowerCase();
-    return transactions.filter(t => t.description.toLowerCase().includes(term));
+    return transactions.filter(
+      (t) => t.clientId === client.id || t.description.toLowerCase().includes(term)
+    );
   }, [client, transactions]);
 
-  // Calculate totals
   const stats = useMemo(() => {
-    return clientTransactions.reduce(
+    const totals = clientTransactions.reduce(
       (acc, curr) => {
         if (curr.type === TransactionType.INCOME) {
           acc.totalIncome += curr.amount;
           acc.balance += curr.amount;
+          acc.incomeMonths.add(curr.date.slice(0, 7));
         } else {
           acc.totalExpense += curr.amount;
           acc.balance -= curr.amount;
         }
         return acc;
       },
-      { totalIncome: 0, totalExpense: 0, balance: 0 }
+      {
+        totalIncome: 0,
+        totalExpense: 0,
+        balance: 0,
+        incomeMonths: new Set<string>(),
+      }
     );
+
+    const monthsActive = totals.incomeMonths.size;
+    const ltv = totals.totalIncome;
+    const avgMonthlyLtv = monthsActive > 0 ? ltv / monthsActive : 0;
+
+    return {
+      totalIncome: totals.totalIncome,
+      totalExpense: totals.totalExpense,
+      balance: totals.balance,
+      ltv,
+      monthsActive,
+      avgMonthlyLtv,
+    };
   }, [clientTransactions]);
 
   return (
@@ -67,10 +86,19 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
         <div className="p-6 overflow-y-auto custom-scrollbar">
           
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
              <div className="bg-[#121212] p-4 rounded-xl border border-gray-800">
                 <span className="text-xs text-gray-500 block mb-1">Total Recebido</span>
                 <span className="text-lg font-bold text-vybe-green">{formatCurrency(stats.totalIncome)}</span>
+             </div>
+             <div className="bg-[#121212] p-4 rounded-xl border border-gray-800">
+                <span className="text-xs text-gray-500 block mb-1 flex items-center gap-1">
+                  <Gem size={12} className="text-vybe-accent" /> LTV (Lifetime Value)
+                </span>
+                <span className="text-lg font-bold text-vybe-accent">{formatCurrency(stats.ltv)}</span>
+                <span className="text-[10px] text-gray-500 block mt-1">
+                  {stats.monthsActive} {stats.monthsActive === 1 ? 'mês' : 'meses'} · média {formatCurrency(stats.avgMonthlyLtv)}/mês
+                </span>
              </div>
              <div className="bg-[#121212] p-4 rounded-xl border border-gray-800">
                 <span className="text-xs text-gray-500 block mb-1">Custos Vinculados</span>
@@ -137,7 +165,7 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
         {/* Footer */}
         <div className="p-4 bg-[#1E1E1E] border-t border-gray-800 text-center">
              <p className="text-[10px] text-gray-500">
-                * As transações são filtradas automaticamente pela presença do nome "{client.name}" na descrição.
+                * Transações vinculadas por cliente ou pelo nome "{client.name}" na descrição. LTV = receitas acumuladas do cliente.
              </p>
         </div>
       </div>

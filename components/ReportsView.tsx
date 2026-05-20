@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useToast } from './ToastProvider';
+import { useAppData } from '../src/context/AppDataContext';
 import { Transaction, TransactionType, Category, Client, TransactionStatus, CompanySettings } from '../types';
 import { formatCurrency, formatDate } from '../utils';
-import { Printer, TrendingUp, DollarSign, Percent, PieChart, BarChart3, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, AlertCircle, CheckCircle, Clock, Download, X, FileText } from 'lucide-react';
+import { Printer, TrendingUp, DollarSign, Percent, PieChart, BarChart3, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, AlertCircle, CheckCircle, Clock, Download, X, FileText, Users, UserPlus, UserMinus, Receipt } from 'lucide-react';
 
 interface ReportsViewProps {
   transactions: Transaction[];
@@ -13,6 +15,8 @@ type SortKey = 'date' | 'amount' | 'category' | 'description' | 'status';
 type SortDirection = 'asc' | 'desc';
 
 const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, companySettings }) => {
+  const toast = useToast();
+  const { reportsDateFilter, setReportsDateFilter, bankAccounts } = useAppData();
   const currentYear = new Date().getFullYear();
   
   // --- STATE FOR FILTERS ---
@@ -21,6 +25,14 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedBankAccount, setSelectedBankAccount] = useState<string>('all');
+
+  useEffect(() => {
+    if (!reportsDateFilter) return;
+    setStartDate(reportsDateFilter.startDate);
+    setEndDate(reportsDateFilter.endDate);
+    setReportsDateFilter(null);
+  }, [reportsDateFilter, setReportsDateFilter]);
   
   // Sorting State
   const [sortKey, setSortKey] = useState<SortKey>('date');
@@ -32,6 +44,14 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
       // 1. Date Range
       if (startDate && t.date < startDate) return false;
       if (endDate && t.date > endDate) return false;
+
+      if (selectedBankAccount !== 'all') {
+        if (selectedBankAccount === 'none') {
+          if (t.bankAccountId) return false;
+        } else if (t.bankAccountId !== selectedBankAccount) {
+          return false;
+        }
+      }
 
       // 2. Text Search (Description or Category or Client Name)
       if (searchText) {
@@ -55,7 +75,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
 
       return true;
     });
-  }, [transactions, startDate, endDate, searchText, selectedCategory, selectedStatus, clients]);
+  }, [transactions, startDate, endDate, searchText, selectedCategory, selectedStatus, selectedBankAccount, clients]);
 
   // --- SORT LOGIC ---
   const sortedTransactions = useMemo(() => {
@@ -76,19 +96,103 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
 
   // --- KPI CALCULATIONS ---
   const kpis = useMemo(() => {
-    const revenue = filteredTransactions
-      .filter(t => t.type === TransactionType.INCOME)
+    const paid = filteredTransactions.filter((t) => t.status === TransactionStatus.PAID);
+
+    const revenue = paid
+      .filter((t) => t.type === TransactionType.INCOME)
       .reduce((acc, curr) => acc + curr.amount, 0);
 
-    const expenses = filteredTransactions
-      .filter(t => t.type === TransactionType.EXPENSE)
+    const expenses = paid
+      .filter((t) => t.type === TransactionType.EXPENSE)
+      .reduce((acc, curr) => acc + curr.amount, 0);
+
+    const pendingIncome = filteredTransactions
+      .filter((t) => t.status === TransactionStatus.PENDING && t.type === TransactionType.INCOME)
+      .reduce((acc, curr) => acc + curr.amount, 0);
+
+    const pendingExpense = filteredTransactions
+      .filter((t) => t.status === TransactionStatus.PENDING && t.type === TransactionType.EXPENSE)
       .reduce((acc, curr) => acc + curr.amount, 0);
 
     const profit = revenue - expenses;
     const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
 
-    return { revenue, expenses, profit, margin };
+    return { revenue, expenses, profit, margin, pendingIncome, pendingExpense };
   }, [filteredTransactions]);
+
+  const clientMetrics = useMemo(() => {
+    const activeClients = clients.filter((c) => c.contractStatus === 'Ativo');
+    const activeCount = activeClients.length;
+    const totalContracts = activeClients.reduce((sum, c) => sum + c.monthlyFee, 0);
+    const ticketMedio = activeCount > 0 ? totalContracts / activeCount : 0;
+    const mrr = totalContracts;
+
+    const now = new Date();
+    const defaultStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const defaultEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const periodStart = startDate || defaultStart;
+    const periodEnd = endDate || defaultEnd;
+
+    const matchesClientPayment = (client: Client, t: Transaction) => {
+      if (t.type !== TransactionType.INCOME) return false;
+      const namePattern = `mensalidade - ${client.name}`.toLowerCase();
+      return (
+        t.clientId === client.id ||
+        (t.category === Category.CLIENT_PAYMENT &&
+          t.description.toLowerCase().includes(namePattern))
+      );
+    };
+
+    const getLastPaymentDate = (client: Client): string | null => {
+      let latest: string | null = null;
+      transactions.forEach((t) => {
+        if (!matchesClientPayment(client, t)) return;
+        const day = t.date.slice(0, 10);
+        if (!latest || day > latest) latest = day;
+      });
+      return latest;
+    };
+
+    let newMrr = 0;
+    let newContractsCount = 0;
+    clients.forEach((client) => {
+      const addedAt = client.createdAt;
+      if (!addedAt || addedAt < periodStart || addedAt > periodEnd) return;
+      newMrr += client.monthlyFee;
+      newContractsCount += 1;
+    });
+
+    const cancelledClients = clients.filter((c) => c.contractStatus === 'Cancelado');
+    let churnCount = 0;
+    let churnMrr = 0;
+    cancelledClients.forEach((client) => {
+      const lastPayment = getLastPaymentDate(client);
+      if (lastPayment && lastPayment >= periodStart && lastPayment <= periodEnd) {
+        churnCount += 1;
+        churnMrr += client.monthlyFee;
+      }
+    });
+
+    const churnBase = activeCount + churnCount;
+    const churnRate = churnBase > 0 ? (churnCount / churnBase) * 100 : 0;
+    const totalCancelled = cancelledClients.length;
+
+    return {
+      activeCount,
+      ticketMedio,
+      mrr,
+      newMrr,
+      newContractsCount,
+      totalContracts,
+      periodStart,
+      periodEnd,
+      churnCount,
+      churnMrr,
+      churnRate,
+      totalCancelled,
+    };
+  }, [clients, transactions, startDate, endDate]);
 
   // --- CHART DATA ---
   const expensesByCategory = useMemo(() => {
@@ -96,7 +200,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
     let totalExp = 0;
 
     filteredTransactions
-      .filter(t => t.type === TransactionType.EXPENSE)
+      .filter((t) => t.type === TransactionType.EXPENSE && t.status === TransactionStatus.PAID)
       .forEach(t => {
         const current = expenseMap.get(t.category) || 0;
         expenseMap.set(t.category, current + t.amount);
@@ -126,11 +230,21 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
       const label = d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
       
       const income = filteredTransactions
-        .filter(t => t.date.startsWith(key) && t.type === TransactionType.INCOME)
+        .filter(
+          (t) =>
+            t.date.startsWith(key) &&
+            t.type === TransactionType.INCOME &&
+            t.status === TransactionStatus.PAID,
+        )
         .reduce((acc, curr) => acc + curr.amount, 0);
 
       const expense = filteredTransactions
-        .filter(t => t.date.startsWith(key) && t.type === TransactionType.EXPENSE)
+        .filter(
+          (t) =>
+            t.date.startsWith(key) &&
+            t.type === TransactionType.EXPENSE &&
+            t.status === TransactionStatus.PAID,
+        )
         .reduce((acc, curr) => acc + curr.amount, 0);
 
       data.push({ label, income, expense });
@@ -210,7 +324,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
     // Access jsPDF from window object (loaded via CDN)
     const win = window as any;
     if (!win.jspdf) {
-      alert("Biblioteca PDF ainda carregando. Tente novamente em instantes.");
+      toast.info('Biblioteca PDF ainda carregando. Tente novamente em instantes.');
       return;
     }
     
@@ -393,7 +507,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
          <div className="flex items-center gap-2 mb-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
             <Filter size={12} /> Filtros Avançados
          </div>
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             {/* Date Range */}
             <div>
                <label className="text-[10px] text-gray-500 block mb-1">De</label>
@@ -466,6 +580,23 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
                   <option value={TransactionStatus.PENDING}>Pendentes</option>
                </select>
             </div>
+
+            {bankAccounts.length > 0 && (
+            <div>
+               <label className="text-[10px] text-gray-500 block mb-1">Conta bancária</label>
+               <select
+                 value={selectedBankAccount}
+                 onChange={(e) => setSelectedBankAccount(e.target.value)}
+                 className="w-full bg-[#121212] border border-gray-700 rounded p-2 text-xs text-white focus:border-vybe-accent outline-none cursor-pointer"
+               >
+                  <option value="all">Todas</option>
+                  <option value="none">Sem conta</option>
+                  {bankAccounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+               </select>
+            </div>
+            )}
          </div>
       </div>
 
@@ -481,12 +612,15 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
       {/* KPI Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-vybe-card print:bg-white print:border print:border-gray-200 p-6 rounded-xl border border-gray-800 shadow-lg">
-          <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2 print:text-gray-600">Receita (Período)</p>
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2 print:text-gray-600">Receita (pagos)</p>
           <p className="text-2xl font-bold text-vybe-green print:text-black">{formatCurrency(kpis.revenue)}</p>
+          {kpis.pendingIncome > 0 && (
+            <p className="text-[10px] text-amber-500 mt-1">+ {formatCurrency(kpis.pendingIncome)} a receber</p>
+          )}
         </div>
 
         <div className="bg-vybe-card print:bg-white print:border print:border-gray-200 p-6 rounded-xl border border-gray-800 shadow-lg">
-          <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2 print:text-gray-600">Resultado Líquido</p>
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2 print:text-gray-600">Resultado Líquido (pagos)</p>
           <p className={`text-2xl font-bold ${kpis.profit >= 0 ? 'text-vybe-green print:text-black' : 'text-vybe-red'}`}>
             {formatCurrency(kpis.profit)}
           </p>
@@ -495,6 +629,52 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
         <div className="bg-vybe-card print:bg-white print:border print:border-gray-200 p-6 rounded-xl border border-gray-800 shadow-lg">
           <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2 print:text-gray-600">Margem</p>
           <p className="text-2xl font-bold text-vybe-accent print:text-black">{kpis.margin.toFixed(1)}%</p>
+        </div>
+      </div>
+
+      {/* Carteira & MRR */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-vybe-card print:bg-white print:border print:border-gray-200 p-6 rounded-xl border border-gray-800 shadow-lg">
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2 print:text-gray-600 flex items-center gap-1.5">
+            <Receipt size={14} /> Ticket Médio
+          </p>
+          <p className="text-2xl font-bold text-white print:text-black">{formatCurrency(clientMetrics.ticketMedio)}</p>
+          <p className="text-[10px] text-gray-500 mt-2">
+            {formatCurrency(clientMetrics.totalContracts)} em contratos ÷ {clientMetrics.activeCount} clientes ativos
+          </p>
+        </div>
+
+        <div className="bg-vybe-card print:bg-white print:border print:border-gray-200 p-6 rounded-xl border border-gray-800 shadow-lg">
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2 print:text-gray-600 flex items-center gap-1.5">
+            <UserPlus size={14} /> Novo MRR
+          </p>
+          <p className="text-2xl font-bold text-vybe-green print:text-black">{formatCurrency(clientMetrics.newMrr)}</p>
+          <p className="text-[10px] text-gray-500 mt-2">
+            {clientMetrics.newContractsCount} novo(s) contrato(s) cadastrado(s) ({clientMetrics.periodStart} a {clientMetrics.periodEnd})
+          </p>
+        </div>
+
+        <div className="bg-vybe-card print:bg-white print:border print:border-gray-200 p-6 rounded-xl border border-gray-800 shadow-lg">
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2 print:text-gray-600 flex items-center gap-1.5">
+            <Users size={14} /> Clientes Ativos
+          </p>
+          <p className="text-2xl font-bold text-vybe-accent print:text-black">{clientMetrics.activeCount}</p>
+          <p className="text-[10px] text-gray-500 mt-2">
+            MRR da carteira: {formatCurrency(clientMetrics.mrr)}
+          </p>
+        </div>
+
+        <div className="bg-vybe-card print:bg-white print:border print:border-gray-200 p-6 rounded-xl border border-gray-800 shadow-lg">
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2 print:text-gray-600 flex items-center gap-1.5">
+            <UserMinus size={14} /> Churn
+          </p>
+          <p className="text-2xl font-bold text-vybe-red print:text-black">{clientMetrics.churnRate.toFixed(1)}%</p>
+          <p className="text-[10px] text-gray-500 mt-2">
+            {clientMetrics.churnCount} cancelamento(s) no período · {formatCurrency(clientMetrics.churnMrr)} MRR perdido
+          </p>
+          <p className="text-[10px] text-gray-600 mt-1">
+            {clientMetrics.totalCancelled} cliente(s) cancelados no total
+          </p>
         </div>
       </div>
 

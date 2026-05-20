@@ -2,6 +2,7 @@ import React from 'react';
 import { Transaction, TransactionType, Client, CompanySettings } from '../types';
 import { formatCurrency, formatDate } from '../utils';
 import { X, Printer, FileCheck, Download } from 'lucide-react';
+import { useToast } from './ToastProvider';
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -12,6 +13,8 @@ interface ReceiptModalProps {
 }
 
 const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transaction, client, companySettings }) => {
+  const toast = useToast();
+
   if (!isOpen || !transaction) return null;
 
   const isIncome = transaction.type === TransactionType.INCOME;
@@ -25,7 +28,7 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
   const handleDownloadPDF = () => {
     const win = window as any;
     if (!win.jspdf) {
-      alert("Biblioteca PDF carregando...");
+      toast.info('Biblioteca PDF carregando...');
       return;
     }
 

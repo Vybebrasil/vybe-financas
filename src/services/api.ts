@@ -7,7 +7,15 @@ import {
   TransactionType,
   Category,
   TransactionStatus,
+  CompanySettings,
+  BankAccount,
 } from '../../types';
+import {
+  mapCompanySettingsFromDB,
+  mapCompanySettingsFromMetadata,
+  mapCompanySettingsToDB,
+  type CompanySettingsRow,
+} from './companySettingsMapper';
 
 const requireUser = async () => {
   // getSession é síncrono com o storage local — evita race após login (comum em produção)
@@ -29,6 +37,7 @@ const mapTransactionFromDB = (data: Record<string, unknown>): Transaction => ({
   date: data.date as string,
   status: data.status as TransactionStatus,
   clientId: (data.client_id as string) || undefined,
+  bankAccountId: (data.bank_account_id as string) || undefined,
   paymentMethod: (data.payment_method as Transaction['paymentMethod']) || 'OUTRO',
   receiptUrl: (data.receipt_url as string) || undefined,
 });
@@ -42,6 +51,7 @@ const mapTransactionToDB = (t: Omit<Transaction, 'id'> | Transaction, userId: st
   date: t.date,
   status: t.status,
   client_id: t.clientId || null,
+  bank_account_id: t.bankAccountId || null,
   payment_method: t.paymentMethod,
   receipt_url: t.receiptUrl || null,
 });
@@ -57,6 +67,7 @@ const mapClientFromDB = (c: Record<string, unknown>): Client => ({
   monthlyFee: Number(c.monthly_fee) || 0,
   dueDay: Number(c.due_day) || 1,
   contractStatus: (c.contract_status as Client['contractStatus']) || 'Pendente',
+  createdAt: c.created_at ? String(c.created_at).slice(0, 10) : undefined,
 });
 
 const mapClientToDB = (c: Omit<Client, 'id'>, userId: string) => ({
@@ -101,6 +112,37 @@ const mapSubscriptionFromDB = (s: Record<string, unknown>): Subscription => ({
   active: Boolean(s.active),
 });
 
+const uploadStorageFile = async (bucket: 'receipts' | 'logos', file: File): Promise<string> => {
+  const user = await requireUser();
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+  const path = `${user.id}/${Date.now()}.${ext}`;
+
+  const { error } = await supabase.storage.from(bucket).upload(path, file, {
+    cacheControl: '3600',
+    upsert: false,
+  });
+  if (error) throw error;
+
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return data.publicUrl;
+};
+
+const mapBankAccountFromDB = (row: Record<string, unknown>): BankAccount => ({
+  id: row.id as string,
+  name: row.name as string,
+  institution: (row.institution as string) || '',
+  initialBalance: Number(row.initial_balance) || 0,
+  isDefault: Boolean(row.is_default),
+});
+
+const mapBankAccountToDB = (a: Omit<BankAccount, 'id'>, userId: string) => ({
+  user_id: userId,
+  name: a.name,
+  institution: a.institution,
+  initial_balance: a.initialBalance,
+  is_default: a.isDefault,
+});
+
 const mapSubscriptionToDB = (s: Omit<Subscription, 'id'>, userId: string) => ({
   user_id: userId,
   name: s.name,
@@ -118,6 +160,66 @@ export const api = {
         data: { ...user.user_metadata, ...metadata },
       });
       if (error) throw error;
+    },
+  },
+
+  companySettings: {
+    async load(): Promise<CompanySettings> {
+      const user = await requireUser();
+      const { data, error } = await supabase
+        .from('company_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (error) {
+        if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
+          return mapCompanySettingsFromMetadata(user.user_metadata);
+        }
+        throw error;
+      }
+
+      if (data) return mapCompanySettingsFromDB(data as CompanySettingsRow);
+
+      const fromMetadata = mapCompanySettingsFromMetadata(user.user_metadata);
+      try {
+        await api.companySettings.save(fromMetadata);
+      } catch {
+        // Tabela indisponível: segue com metadata
+      }
+      return fromMetadata;
+    },
+
+    async save(settings: CompanySettings): Promise<void> {
+      const user = await requireUser();
+      const payload = mapCompanySettingsToDB(user.id, settings);
+      const { error } = await supabase.from('company_settings').upsert(payload, {
+        onConflict: 'user_id',
+      });
+
+      if (error) {
+        if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
+          await api.user.updateMetadata({
+            company_name: settings.name,
+            cnpj: settings.cnpj,
+            phone: settings.phone,
+            address: settings.address,
+            logoUrl: settings.logoUrl,
+            service_plans: settings.plans ?? [],
+            message_templates: settings.messageTemplates ?? [],
+          });
+          return;
+        }
+        throw error;
+      }
+
+      await api.user.updateMetadata({
+        company_name: settings.name,
+        cnpj: settings.cnpj,
+        phone: settings.phone,
+        address: settings.address,
+        logoUrl: settings.logoUrl,
+      });
     },
   },
 
@@ -168,6 +270,69 @@ export const api = {
         .eq('user_id', user.id);
 
       if (error) throw error;
+    },
+
+    async update(id: string, transaction: Transaction) {
+      const user = await requireUser();
+      const payload = mapTransactionToDB(transaction, user.id);
+      const { data, error } = await supabase
+        .from('transactions')
+        .update(payload)
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return mapTransactionFromDB(data);
+    },
+  },
+
+  storage: {
+    uploadReceipt: (file: File) => uploadStorageFile('receipts', file),
+    uploadLogo: (file: File) => uploadStorageFile('logos', file),
+  },
+
+  recurring: {
+    async hasGenerated(monthKey: string): Promise<boolean> {
+      const user = await requireUser();
+      const { data, error } = await supabase
+        .from('recurring_generation_log')
+        .select('month_key')
+        .eq('user_id', user.id)
+        .eq('month_key', monthKey)
+        .maybeSingle();
+
+      if (error) {
+        if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
+          const legacy = user.user_metadata?.last_recurring_month as string | undefined;
+          return legacy === monthKey;
+        }
+        throw error;
+      }
+      return Boolean(data);
+    },
+
+    async markGenerated(monthKey: string, transactionsCount: number): Promise<void> {
+      const user = await requireUser();
+      const { error } = await supabase.from('recurring_generation_log').upsert(
+        {
+          user_id: user.id,
+          month_key: monthKey,
+          transactions_count: transactionsCount,
+        },
+        { onConflict: 'user_id,month_key' },
+      );
+
+      if (error) {
+        if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
+          await api.user.updateMetadata({ last_recurring_month: monthKey });
+          return;
+        }
+        throw error;
+      }
+
+      await api.user.updateMetadata({ last_recurring_month: monthKey });
     },
   },
 
@@ -257,6 +422,68 @@ export const api = {
       const user = await requireUser();
       const { error } = await supabase
         .from('employees')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+    },
+  },
+
+  bankAccounts: {
+    async list() {
+      const user = await requireUser();
+      const { data, error } = await supabase
+        .from('bank_accounts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('is_default', { ascending: false })
+        .order('name');
+
+      if (error) throw error;
+      return (data ?? []).map(mapBankAccountFromDB);
+    },
+
+    async create(account: Omit<BankAccount, 'id'>) {
+      const user = await requireUser();
+      if (account.isDefault) {
+        await supabase
+          .from('bank_accounts')
+          .update({ is_default: false })
+          .eq('user_id', user.id);
+      }
+      const { data, error } = await supabase
+        .from('bank_accounts')
+        .insert([mapBankAccountToDB(account, user.id)])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return mapBankAccountFromDB(data);
+    },
+
+    async update(id: string, account: BankAccount) {
+      const user = await requireUser();
+      if (account.isDefault) {
+        await supabase
+          .from('bank_accounts')
+          .update({ is_default: false })
+          .eq('user_id', user.id)
+          .neq('id', id);
+      }
+      const { error } = await supabase
+        .from('bank_accounts')
+        .update(mapBankAccountToDB(account, user.id))
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+    },
+
+    async delete(id: string) {
+      const user = await requireUser();
+      const { error } = await supabase
+        .from('bank_accounts')
         .delete()
         .eq('id', id)
         .eq('user_id', user.id);

@@ -28,7 +28,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     try {
       if (isForgotPassword) {
         // --- RECUPERAÇÃO DE SENHA ---
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
+        const redirectTo = `${window.location.origin}${window.location.pathname}`;
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo,
+        });
         if (resetError) throw resetError;
         setSuccessMessage('Se o e-mail existir, um link de recuperação foi enviado.');
         setIsForgotPassword(false);

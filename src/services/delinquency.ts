@@ -1,0 +1,99 @@
+import { Client, Transaction, TransactionType, TransactionStatus, Category } from '../../types';
+import { dateInMonth, getCurrentMonthKey, todayIsoDate } from './recurringLogic';
+
+export type ClientBillingStatus = 'paid' | 'pending' | 'overdue' | 'upcoming' | 'no_charge';
+
+export interface ClientBillingSnapshot {
+  client: Client;
+  status: ClientBillingStatus;
+  monthKey: string;
+  dueDate: string;
+  amount: number;
+  daysOverdue: number;
+  transactionId?: string;
+}
+
+const matchesClientPayment = (client: Client, t: Transaction, monthKey: string): boolean => {
+  if (t.type !== TransactionType.INCOME) return false;
+  if (!t.date.startsWith(monthKey)) return false;
+  const namePattern = `mensalidade - ${client.name}`.toLowerCase();
+  return (
+    t.clientId === client.id ||
+    (t.category === Category.CLIENT_PAYMENT &&
+      t.description.toLowerCase().includes(namePattern))
+  );
+};
+
+export function getClientBillingSnapshot(
+  client: Client,
+  transactions: Transaction[],
+  monthKey = getCurrentMonthKey(),
+  today = todayIsoDate(),
+): ClientBillingSnapshot {
+  const dueDate = dateInMonth(monthKey, client.dueDay);
+  const monthTx = transactions.filter((t) => matchesClientPayment(client, t, monthKey));
+  const paidTx = monthTx.find((t) => t.status === TransactionStatus.PAID);
+  const pendingTx = monthTx.find((t) => t.status === TransactionStatus.PENDING);
+
+  let status: ClientBillingStatus = 'no_charge';
+  let daysOverdue = 0;
+
+  if (paidTx) {
+    status = 'paid';
+  } else if (pendingTx) {
+    status = today > dueDate ? 'overdue' : 'pending';
+    if (status === 'overdue') {
+      daysOverdue = Math.floor(
+        (new Date(today).getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24),
+      );
+    }
+  } else if (client.contractStatus === 'Ativo') {
+    if (today > dueDate) {
+      status = 'overdue';
+      daysOverdue = Math.floor(
+        (new Date(today).getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24),
+      );
+    } else {
+      status = 'upcoming';
+    }
+  }
+
+  return {
+    client,
+    status,
+    monthKey,
+    dueDate,
+    amount: client.monthlyFee,
+    daysOverdue,
+    transactionId: pendingTx?.id ?? paidTx?.id,
+  };
+}
+
+export function getDelinquencyReport(
+  clients: Client[],
+  transactions: Transaction[],
+  monthKey = getCurrentMonthKey(),
+): {
+  overdue: ClientBillingSnapshot[];
+  pending: ClientBillingSnapshot[];
+  totalOverdueAmount: number;
+  totalPendingAmount: number;
+} {
+  const active = clients.filter((c) => c.contractStatus === 'Ativo');
+  const snapshots = active.map((c) => getClientBillingSnapshot(c, transactions, monthKey));
+
+  const overdue = snapshots
+    .filter((s) => s.status === 'overdue')
+    .sort((a, b) => b.daysOverdue - a.daysOverdue);
+
+  const pending = snapshots
+    .filter((s) => s.status === 'pending')
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+  return {
+    overdue,
+    pending,
+    totalOverdueAmount: overdue.reduce((sum, s) => sum + s.amount, 0),
+    totalPendingAmount: pending.reduce((sum, s) => sum + s.amount, 0),
+  };
+}

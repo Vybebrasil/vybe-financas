@@ -8,9 +8,16 @@ interface ClientFormProps {
   onUpdateClient: (client: Client) => void;
   editingClient: Client | null;
   onCancelEdit: () => void;
+  plans?: string[];
 }
 
-const ClientForm: React.FC<ClientFormProps> = ({ onAddClient, onUpdateClient, editingClient, onCancelEdit }) => {
+const ClientForm: React.FC<ClientFormProps> = ({
+  onAddClient,
+  onUpdateClient,
+  editingClient,
+  onCancelEdit,
+  plans = [],
+}) => {
   const [name, setName] = useState('');
   const [cnpj, setCnpj] = useState('');
   const [contactPerson, setContactPerson] = useState('');
@@ -37,6 +44,14 @@ const ClientForm: React.FC<ClientFormProps> = ({ onAddClient, onUpdateClient, ed
       resetForm();
     }
   }, [editingClient]);
+
+  const planOptions = React.useMemo(() => {
+    const list = [...plans];
+    if (editingClient?.activePlan && !list.includes(editingClient.activePlan)) {
+      list.unshift(editingClient.activePlan);
+    }
+    return list;
+  }, [plans, editingClient?.activePlan]);
 
   const resetForm = () => {
     setName('');
@@ -181,14 +196,32 @@ const ClientForm: React.FC<ClientFormProps> = ({ onAddClient, onUpdateClient, ed
         <div className="lg:col-span-3">
           <label className="block text-xs text-vybe-muted mb-1 font-medium">Plano Ativo</label>
           <div className="relative">
-             <Briefcase size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-             <input
-              type="text"
-              value={activePlan}
-              onChange={(e) => setActivePlan(e.target.value)}
-              placeholder="Ex: Gestão Redes Sociais"
-              className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 pl-9 text-white focus:outline-none focus:border-vybe-accent focus:ring-1 focus:ring-vybe-accent transition-all placeholder-gray-600"
-            />
+            <Briefcase size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 z-10 pointer-events-none" />
+            {planOptions.length > 0 ? (
+              <select
+                value={activePlan}
+                onChange={(e) => setActivePlan(e.target.value)}
+                className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 pl-9 text-white focus:outline-none focus:border-vybe-accent focus:ring-1 focus:ring-vybe-accent transition-all appearance-none cursor-pointer"
+                required
+              >
+                <option value="" disabled>
+                  Selecione um plano
+                </option>
+                {planOptions.map((plan) => (
+                  <option key={plan} value={plan}>
+                    {plan}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={activePlan}
+                onChange={(e) => setActivePlan(e.target.value)}
+                placeholder="Cadastre planos em Configurações do Sistema"
+                className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 pl-9 text-white focus:outline-none focus:border-vybe-accent focus:ring-1 focus:ring-vybe-accent transition-all placeholder-gray-600"
+              />
+            )}
           </div>
         </div>
 

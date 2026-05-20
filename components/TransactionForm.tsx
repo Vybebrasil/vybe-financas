@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Category, Transaction, TransactionType, TransactionStatus, Client, PaymentMethod } from '../types';
+import { Category, Transaction, TransactionType, TransactionStatus, Client, PaymentMethod, BankAccount } from '../types';
 import { generateId } from '../utils';
-import { PlusCircle, CheckCircle, Clock, Link as LinkIcon, CreditCard, QrCode, Barcode, Banknote, Upload, FileText, X, TrendingUp, TrendingDown } from 'lucide-react';
-import { STORAGE_KEY_CLIENTS } from '../constants';
+import { PlusCircle, CheckCircle, Clock, Link as LinkIcon, CreditCard, QrCode, Barcode, Banknote, Upload, FileText, X, TrendingUp, TrendingDown, Save } from 'lucide-react';
 import { api } from '../src/services/api';
+import { useToast } from './ToastProvider';
 
 interface TransactionFormProps {
   onAddTransaction: (transaction: Transaction) => void;
+  onUpdateTransaction?: (transaction: Transaction) => Promise<void>;
+  editingTransaction?: Transaction | null;
+  onCancelEdit?: () => void;
   initialData?: {
     description: string;
     amount: number;
@@ -15,9 +18,20 @@ interface TransactionFormProps {
     clientId?: string;
   } | null;
   clients: Client[];
+  bankAccounts?: BankAccount[];
 }
 
-const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, initialData, clients }) => {
+const TransactionForm: React.FC<TransactionFormProps> = ({
+  onAddTransaction,
+  onUpdateTransaction,
+  editingTransaction,
+  onCancelEdit,
+  initialData,
+  clients,
+  bankAccounts = [],
+}) => {
+  const toast = useToast();
+  const isEditing = Boolean(editingTransaction);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -26,24 +40,42 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, ini
   const [status, setStatus] = useState<TransactionStatus>(TransactionStatus.PAID);
   const [clientId, setClientId] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
+  const [bankAccountId, setBankAccountId] = useState<string>('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+
+  const defaultBankAccountId = bankAccounts.find((a) => a.isDefault)?.id ?? bankAccounts[0]?.id ?? '';
   const [isUploading, setIsUploading] = useState(false);
 
   // Clients are now passed via props
 
 
-  // Update form when initialData changes
   useEffect(() => {
+    if (editingTransaction) {
+      setDescription(editingTransaction.description);
+      setAmount(editingTransaction.amount.toString());
+      setDate(editingTransaction.date.split('T')[0]);
+      setCategory(editingTransaction.category);
+      setType(editingTransaction.type);
+      setStatus(editingTransaction.status);
+      setClientId(editingTransaction.clientId ?? '');
+      setPaymentMethod(editingTransaction.paymentMethod);
+      setBankAccountId(editingTransaction.bankAccountId ?? '');
+      setReceiptFile(null);
+      return;
+    }
     if (initialData) {
       setDescription(initialData.description);
       setAmount(initialData.amount.toString());
       setCategory(initialData.category);
       setType(initialData.type ?? TransactionType.INCOME);
       setClientId(initialData.clientId ?? '');
+      setBankAccountId(initialData.bankAccountId ?? defaultBankAccountId);
       setDate(new Date().toISOString().split('T')[0]);
       setStatus(TransactionStatus.PAID);
+      return;
     }
-  }, [initialData]);
+    setBankAccountId(defaultBankAccountId);
+  }, [initialData, editingTransaction, defaultBankAccountId]);
 
   // Business Logic: Auto-assign type based on category
   useEffect(() => {
@@ -77,17 +109,16 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, ini
     if (!description || !amount || !date) return;
 
     setIsUploading(true);
-    let receiptUrl = '';
+    let receiptUrl = editingTransaction?.receiptUrl;
 
     try {
       if (receiptFile) {
-        // Upload File
         const url = await api.storage.uploadReceipt(receiptFile);
         if (url) receiptUrl = url;
       }
 
-      const newTransaction: Transaction = {
-        id: generateId(),
+      const payload: Transaction = {
+        id: editingTransaction?.id ?? generateId(),
         description,
         amount: Number(amount),
         type,
@@ -95,26 +126,29 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, ini
         date,
         status,
         clientId: clientId || undefined,
+        bankAccountId: bankAccountId || undefined,
         paymentMethod,
-        receiptUrl: receiptUrl || undefined
+        receiptUrl: receiptUrl || undefined,
       };
 
-      await onAddTransaction(newTransaction);
-
-      // Reset form
-      setDescription('');
-      setAmount('');
-      setClientId('');
-      setType(TransactionType.INCOME);
-      setStatus(TransactionStatus.PAID);
-      setPaymentMethod('PIX');
-      setReceiptFile(null);
+      if (isEditing && onUpdateTransaction) {
+        await onUpdateTransaction(payload);
+        onCancelEdit?.();
+      } else {
+        await onAddTransaction(payload);
+        setDescription('');
+        setAmount('');
+        setClientId('');
+        setType(TransactionType.INCOME);
+        setStatus(TransactionStatus.PAID);
+        setPaymentMethod('PIX');
+        setReceiptFile(null);
+      }
     } catch (error) {
-      console.error("Error creating transaction:", error);
-      console.error("Error creating transaction:", error);
-      const errorMessage = (error as any)?.message || "Erro desconhecido";
-      const errorDetails = (error as any)?.details || "";
-      alert(`Erro ao criar transação: ${errorMessage} ${errorDetails}`);
+      console.error('Error saving transaction:', error);
+      const errorMessage = (error as { message?: string })?.message || 'Erro desconhecido';
+      const errorDetails = (error as { details?: string })?.details || '';
+      toast.error(`Erro ao salvar transação: ${errorMessage} ${errorDetails}`.trim());
     } finally {
       setIsUploading(false);
     }
@@ -132,14 +166,19 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, ini
 
   return (
     <form onSubmit={handleSubmit} className="bg-vybe-card p-6 rounded-xl border border-gray-800 shadow-lg mb-8 relative overflow-hidden">
-      {initialData && (
+      {initialData && !isEditing && (
         <div className="absolute top-0 right-0 bg-vybe-accent text-white text-[10px] px-2 py-1 rounded-bl-lg font-bold uppercase tracking-wider">
           Preenchimento Automático
         </div>
       )}
+      {isEditing && (
+        <div className="absolute top-0 right-0 bg-blue-600 text-white text-[10px] px-2 py-1 rounded-bl-lg font-bold uppercase tracking-wider">
+          Editando
+        </div>
+      )}
       <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
         <span className="w-1 h-6 bg-vybe-accent rounded-full"></span>
-        Nova Transação
+        {isEditing ? 'Editar Transação' : 'Nova Transação'}
       </h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4">
@@ -230,6 +269,25 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, ini
             </div>
           </div>
         </div>
+
+        {bankAccounts.length > 0 && (
+          <div className="lg:col-span-3">
+            <label className="block text-xs text-vybe-muted mb-1 font-medium">Conta bancária</label>
+            <select
+              value={bankAccountId}
+              onChange={(e) => setBankAccountId(e.target.value)}
+              className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-vybe-accent focus:ring-1 focus:ring-vybe-accent transition-all appearance-none cursor-pointer"
+            >
+              <option value="">Sem conta</option>
+              {bankAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                  {a.isDefault ? ' (padrão)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Type Toggle */}
         <div className="lg:col-span-3">
@@ -328,14 +386,29 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, ini
         </div>
 
         {/* Submit Button */}
-        <div className="lg:col-span-2 flex items-end">
+        <div className="lg:col-span-2 flex items-end gap-2">
+          {isEditing && onCancelEdit && (
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              className="px-4 py-3 rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 text-sm font-medium"
+            >
+              Cancelar
+            </button>
+          )}
           <button
             type="submit"
             disabled={isUploading}
-            className="w-full bg-vybe-accent hover:bg-[#E65C00] text-white font-bold p-3 rounded-lg flex items-center justify-center transition-colors shadow-lg shadow-orange-900/20 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 bg-vybe-accent hover:bg-[#E65C00] text-white font-bold p-3 rounded-lg flex items-center justify-center transition-colors shadow-lg shadow-orange-900/20 gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isUploading ? <Clock className="animate-spin" size={20} /> : <PlusCircle size={20} />}
-            {isUploading ? 'Salvando...' : 'Adicionar'}
+            {isUploading ? (
+              <Clock className="animate-spin" size={20} />
+            ) : isEditing ? (
+              <Save size={20} />
+            ) : (
+              <PlusCircle size={20} />
+            )}
+            {isUploading ? 'Salvando...' : isEditing ? 'Salvar alterações' : 'Adicionar'}
           </button>
         </div>
       </div>
