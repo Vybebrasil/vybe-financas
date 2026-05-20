@@ -36,6 +36,7 @@ const App: React.FC = () => {
     description: string;
     amount: number;
     category: Category;
+    type?: TransactionType;
     clientId?: string;
   } | null>(null);
 
@@ -401,6 +402,7 @@ const App: React.FC = () => {
       description: `Mensalidade - ${client.name}`,
       amount: client.monthlyFee,
       category: Category.CLIENT_PAYMENT,
+      type: TransactionType.INCOME,
       clientId: client.id,
     });
     setActiveTab('finance');
@@ -416,7 +418,8 @@ const App: React.FC = () => {
     setPreFilledTransaction({
       description: transaction.description,
       amount: transaction.amount,
-      category: transaction.category
+      category: transaction.category,
+      type: transaction.type,
     });
     setActiveTab('finance');
     window.scrollTo({ top: 0, behavior: 'smooth' });

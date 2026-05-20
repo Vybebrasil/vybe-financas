@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Category, Transaction, TransactionType, TransactionStatus, Client, PaymentMethod } from '../types';
 import { generateId } from '../utils';
-import { PlusCircle, CheckCircle, Clock, Link as LinkIcon, CreditCard, QrCode, Barcode, Banknote, Upload, FileText, X } from 'lucide-react';
+import { PlusCircle, CheckCircle, Clock, Link as LinkIcon, CreditCard, QrCode, Barcode, Banknote, Upload, FileText, X, TrendingUp, TrendingDown } from 'lucide-react';
 import { STORAGE_KEY_CLIENTS } from '../constants';
 import { api } from '../src/services/api';
 
@@ -11,6 +11,7 @@ interface TransactionFormProps {
     description: string;
     amount: number;
     category: Category;
+    type?: TransactionType;
     clientId?: string;
   } | null;
   clients: Client[];
@@ -37,6 +38,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, ini
       setDescription(initialData.description);
       setAmount(initialData.amount.toString());
       setCategory(initialData.category);
+      setType(initialData.type ?? TransactionType.INCOME);
       setClientId(initialData.clientId ?? '');
       setDate(new Date().toISOString().split('T')[0]);
       setStatus(TransactionStatus.PAID);
@@ -103,6 +105,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, ini
       setDescription('');
       setAmount('');
       setClientId('');
+      setType(TransactionType.INCOME);
       setStatus(TransactionStatus.PAID);
       setPaymentMethod('PIX');
       setReceiptFile(null);
@@ -204,7 +207,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, ini
 
         {/* --- ROW 2 --- */}
 
-        {/* Payment Method - NOVO CAMPO */}
+        {/* Payment Method */}
         <div className="lg:col-span-3">
           <label className="block text-xs text-vybe-muted mb-1 font-medium">Forma de Pagto</label>
           <div className="relative">
@@ -225,6 +228,27 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, ini
             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
             </div>
+          </div>
+        </div>
+
+        {/* Type Toggle */}
+        <div className="lg:col-span-3">
+          <label className="block text-xs text-vybe-muted mb-1 font-medium">Tipo</label>
+          <div className="flex bg-[#121212] p-1 rounded-lg border border-gray-700 h-[46px]">
+            <button
+              type="button"
+              onClick={() => setType(TransactionType.INCOME)}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-md text-xs font-bold transition-all ${type === TransactionType.INCOME ? 'bg-vybe-green text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              <TrendingUp size={14} /> Entrada
+            </button>
+            <button
+              type="button"
+              onClick={() => setType(TransactionType.EXPENSE)}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-md text-xs font-bold transition-all ${type === TransactionType.EXPENSE ? 'bg-vybe-red text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              <TrendingDown size={14} /> Saída
+            </button>
           </div>
         </div>
 
@@ -250,7 +274,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, ini
         </div>
 
         {/* Client Link (Cost Center) */}
-        <div className="lg:col-span-4">
+        <div className="lg:col-span-3">
           <label className="block text-xs text-vybe-muted mb-1 font-medium">Vincular Cliente (Centro de Custo)</label>
           <div className="relative">
             <LinkIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -316,13 +340,6 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onAddTransaction, ini
         </div>
       </div>
 
-      {/* Visual Indicator of Auto-Type */}
-      <div className="mt-2 text-xs text-gray-500 flex items-center gap-2">
-        <span className="font-semibold">Tipo:</span>
-        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${type === TransactionType.INCOME ? 'bg-vybe-green/20 text-vybe-green' : 'bg-vybe-red/20 text-vybe-red'}`}>
-          {type === TransactionType.INCOME ? 'Entrada' : 'Saída'}
-        </span>
-      </div>
     </form>
   );
 };
