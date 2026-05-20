@@ -1,0 +1,127 @@
+/* Vybe Finanças - Modern Design System Base & Premium Animations */
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --color-bg: #121212;
+  --color-card: #1E1E1E;
+  --color-accent: #FF6600;
+  --color-accent-hover: #E55B00;
+  --color-text: #FFFFFF;
+  --color-muted: #B0B0B0;
+  --color-border: #2A2A2A;
+  --color-green: #10B981;
+  --color-red: #EF4444;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'Poppins', sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Premium Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2D2D2D;
+  border-radius: 4px;
+  border: 2px solid var(--color-bg);
+  transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
+}
+
+/* Premium Glassmorphism & Cards */
+.glass-panel {
+  background: rgba(30, 30, 30, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Micro-animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(1.05);
+  }
+}
+
+.pulse-glow {
+  animation: pulse-glow 8s infinite ease-in-out;
+}
+
+/* Page Transitions */
+.page-fade-in {
+  animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Print Styles */
+@media print {
+  @page {
+    margin: 1cm;
+    size: auto;
+  }
+
+  body {
+    background-color: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .animate-bar-grow {
+    transform: none !important;
+    animation: none !important;
+  }
+  
+  ::-webkit-scrollbar {
+    display: none;
+  }
+
+  header, footer, button, .no-print, .profile-switcher {
+    display: none !important;
+  }
+  
+  .overflow-auto, .overflow-y-auto, .overflow-x-auto {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+}

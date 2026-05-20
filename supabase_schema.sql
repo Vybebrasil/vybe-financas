@@ -1,94 +1,101 @@
--- Create Transactions Table
-CREATE TABLE transactions (
+-- Vybe Finanças — schema alinhado com src/services/api.ts (snake_case)
+-- Execute no Supabase: SQL Editor → New query → Run
+
+-- Transactions
+CREATE TABLE IF NOT EXISTS transactions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   description TEXT NOT NULL,
   amount NUMERIC NOT NULL,
   type TEXT NOT NULL,
   category TEXT NOT NULL,
-  date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  date TIMESTAMPTZ DEFAULT NOW(),
   status TEXT NOT NULL,
-  "clientId" UUID,
-  "paymentMethod" TEXT,
-  "receiptUrl" TEXT
+  client_id UUID,
+  payment_method TEXT,
+  receipt_url TEXT
 );
 
--- ADD COLUMN IF NOT EXISTS (Run this if table already exists)
--- ALTER TABLE transactions ADD COLUMN IF NOT EXISTS "receiptUrl" TEXT;
-
--- Create Clients Table
-CREATE TABLE clients (
+-- Clients
+CREATE TABLE IF NOT EXISTS clients (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   cnpj TEXT,
-  "contactPerson" TEXT,
+  contact_person TEXT,
   email TEXT,
   phone TEXT,
-  "activePlan" TEXT,
-  "monthlyFee" NUMERIC,
-  "dueDay" INTEGER,
-  "contractStatus" TEXT
+  active_plan TEXT,
+  monthly_fee NUMERIC,
+  due_day INTEGER,
+  contract_status TEXT
 );
 
--- Create Employees Table
+-- Employees
 CREATE TABLE IF NOT EXISTS employees (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   role TEXT NOT NULL,
   salary NUMERIC NOT NULL,
-  "pixKey" TEXT,
-  "paymentDay" INTEGER,
+  pix_key TEXT,
+  payment_day INTEGER,
   observations TEXT
 );
 
--- Create Subscriptions Table
+-- Subscriptions
 CREATE TABLE IF NOT EXISTS subscriptions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   cost NUMERIC NOT NULL,
-  "renewalDay" INTEGER,
-  "paymentMethod" TEXT,
+  renewal_day INTEGER,
+  payment_method TEXT,
   active BOOLEAN DEFAULT true
 );
 
--- Enable Row Level Security (RLS)
+-- RLS
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 
--- Create Policies (Allow Public Access for Dev)
--- Drop existing to avoid conflicts if re-running
-DROP POLICY IF EXISTS "Public Transactions" ON transactions;
-DROP POLICY IF EXISTS "Public Clients" ON clients;
-DROP POLICY IF EXISTS "Public Employees" ON employees;
-DROP POLICY IF EXISTS "Public Subscriptions" ON subscriptions;
+-- Policies (per authenticated user)
+DROP POLICY IF EXISTS "transactions_own" ON transactions;
+CREATE POLICY "transactions_own" ON transactions
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Public Transactions" ON transactions FOR ALL USING (true);
-CREATE POLICY "Public Clients" ON clients FOR ALL USING (true);
-CREATE POLICY "Public Employees" ON employees FOR ALL USING (true);
-CREATE POLICY "Public Subscriptions" ON subscriptions FOR ALL USING (true);
+DROP POLICY IF EXISTS "clients_own" ON clients;
+CREATE POLICY "clients_own" ON clients
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
--- STORAGE SETUP
-INSERT INTO storage.buckets (id, name, public) 
+DROP POLICY IF EXISTS "employees_own" ON employees;
+CREATE POLICY "employees_own" ON employees
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "subscriptions_own" ON subscriptions;
+CREATE POLICY "subscriptions_own" ON subscriptions
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- Storage buckets
+INSERT INTO storage.buckets (id, name, public)
 VALUES ('receipts', 'receipts', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Storage Policies
-DROP POLICY IF EXISTS "Public Receipts Upload" ON storage.objects;
-DROP POLICY IF EXISTS "Public Receipts Select" ON storage.objects;
-
-CREATE POLICY "Public Receipts Upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'receipts');
-CREATE POLICY "Public Receipts Select" ON storage.objects FOR SELECT USING (bucket_id = 'receipts');
-
--- LOGOS BUCKET SETUP
-INSERT INTO storage.buckets (id, name, public) 
+INSERT INTO storage.buckets (id, name, public)
 VALUES ('logos', 'logos', true)
 ON CONFLICT (id) DO NOTHING;
 
-DROP POLICY IF EXISTS "Public Logos Upload" ON storage.objects;
-DROP POLICY IF EXISTS "Public Logos Select" ON storage.objects;
+DROP POLICY IF EXISTS "receipts_select" ON storage.objects;
+DROP POLICY IF EXISTS "receipts_insert" ON storage.objects;
+CREATE POLICY "receipts_select" ON storage.objects FOR SELECT USING (bucket_id = 'receipts');
+CREATE POLICY "receipts_insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'receipts');
 
-CREATE POLICY "Public Logos Upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'logos');
-CREATE POLICY "Public Logos Select" ON storage.objects FOR SELECT USING (bucket_id = 'logos');
-CREATE POLICY "Public Logos Update" ON storage.objects FOR UPDATE USING (bucket_id = 'logos');
-CREATE POLICY "Public Logos Delete" ON storage.objects FOR DELETE USING (bucket_id = 'logos');
+DROP POLICY IF EXISTS "logos_select" ON storage.objects;
+DROP POLICY IF EXISTS "logos_insert" ON storage.objects;
+DROP POLICY IF EXISTS "logos_update" ON storage.objects;
+DROP POLICY IF EXISTS "logos_delete" ON storage.objects;
+CREATE POLICY "logos_select" ON storage.objects FOR SELECT USING (bucket_id = 'logos');
+CREATE POLICY "logos_insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'logos');
+CREATE POLICY "logos_update" ON storage.objects FOR UPDATE USING (bucket_id = 'logos');
+CREATE POLICY "logos_delete" ON storage.objects FOR DELETE USING (bucket_id = 'logos');

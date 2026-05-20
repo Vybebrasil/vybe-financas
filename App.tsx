@@ -16,7 +16,7 @@ import ReportsView from './components/ReportsView';
 import CompanySettingsModal from './components/CompanySettingsModal';
 import Login from './components/Login';
 import { Wallet, TrendingUp, TrendingDown, LayoutDashboard, Users, CreditCard, PieChart, Building2, ChevronDown, Loader2 } from 'lucide-react';
-import { supabase } from './src/services/supabase';
+import { supabase, isSupabaseConfigured } from './src/services/supabase';
 import { api } from './src/services/api';
 
 const App: React.FC = () => {
@@ -107,9 +107,18 @@ const App: React.FC = () => {
         }
       }
 
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Erro ao carregar dados:", error);
-      alert("Erro ao conectar com o banco de dados. Verifique sua internet.");
+      const msg = error instanceof Error ? error.message : 'Erro desconhecido';
+      if (msg.includes('não autenticado') || msg.includes('Auth session')) {
+        alert('Sessão expirada. Faça login novamente.');
+        await supabase.auth.signOut();
+        setIsAuthenticated(false);
+      } else if (msg.includes('Could not find the table')) {
+        alert('Tabelas do banco não configuradas. Execute o supabase_schema.sql no painel do Supabase.');
+      } else {
+        alert(`Erro ao carregar dados: ${msg}`);
+      }
     } finally {
       setIsLoadingData(false);
     }
@@ -147,10 +156,17 @@ const App: React.FC = () => {
     checkSession();
 
     // Listener para mudanças de Auth (Login/Logout em outras abas)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setIsAuthenticated(!!session);
-      if (session) fetchData();
-      else setTransactions([]); // Limpa dados ao deslogar
+      if (session && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED')) {
+        // Aguarda a sessão propagar antes de buscar dados (evita falha em produção)
+        setTimeout(() => fetchData(), 0);
+      } else if (!session) {
+        setTransactions([]);
+        setClients([]);
+        setEmployees([]);
+        setSubscriptions([]);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -393,6 +409,91 @@ const App: React.FC = () => {
 
 
   // --- RENDER ---
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen bg-[#121212] flex items-center justify-center p-4 relative overflow-hidden font-sans">
+        {/* Background Decorativo */}
+        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-[#FF6600]/10 rounded-full blur-[120px] pointer-events-none"></div>
+        <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-purple-900/10 rounded-full blur-[120px] pointer-events-none"></div>
+
+        <div className="w-full max-w-2xl bg-[#1E1E1E] border border-gray-800 rounded-2xl shadow-2xl p-8 relative z-10 animate-bar-grow origin-center">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 bg-gradient-to-br from-[#FF6600] to-orange-700 rounded-xl flex items-center justify-center text-white shadow-lg shadow-orange-950/40">
+              <span className="font-bold text-2xl">V</span>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white tracking-tight">
+                Vybe <span className="text-[#FF6600]">Finanças</span>
+              </h1>
+              <p className="text-xs text-gray-400">Portal de Configuração & Diagnóstico</p>
+            </div>
+          </div>
+
+          <div className="bg-orange-950/20 border border-orange-800/30 rounded-xl p-5 mb-6">
+            <h2 className="text-base font-semibold text-orange-400 flex items-center gap-2 mb-2">
+              ⚠️ Supabase não configurado ou com valores padrão
+            </h2>
+            <p className="text-sm text-gray-300 leading-relaxed">
+              O Vybe Finanças utiliza o Supabase para gerenciar a autenticação e o banco de dados. Atualmente, o arquivo <code className="text-xs bg-black/40 px-1.5 py-0.5 rounded font-mono text-orange-300">.env.local</code> não existe ou contém os dados padrão de exemplo.
+            </p>
+          </div>
+
+          <div className="space-y-6 text-sm text-gray-300">
+            <div>
+              <h3 className="font-bold text-white mb-2 flex items-center gap-2">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-[#FF6600] text-xs text-white">1</span>
+                Configuração para Desenvolvimento Local
+              </h3>
+              <p className="mb-3 text-gray-400">
+                Abra ou crie o arquivo <span className="text-white font-semibold">.env.local</span> na raiz do seu projeto e substitua as variáveis com as credenciais do seu projeto Supabase:
+              </p>
+              <pre className="bg-black/60 p-4 rounded-xl font-mono text-xs text-green-400 border border-gray-800 select-all overflow-x-auto">
+{`# Configurações do Supabase para o Frontend (Vite)
+VITE_SUPABASE_URL=https://[seu-projeto-id].supabase.co
+VITE_SUPABASE_ANON_KEY=[sua-anon-key-aqui]
+
+# Configurações do Banco de Dados para o Backend (NestJS) se for rodar local
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=admin
+DB_NAME=vybe_financas_dev`}
+              </pre>
+            </div>
+
+            <div>
+              <h3 className="font-bold text-white mb-2 flex items-center gap-2">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-[#FF6600] text-xs text-white">2</span>
+                Configuração para Produção (Vercel)
+              </h3>
+              <p className="text-gray-400">
+                Se você está vendo isso em produção na Vercel:
+              </p>
+              <ul className="list-disc list-inside mt-2 space-y-1.5 pl-2 text-gray-400">
+                <li>Acesse o <span className="text-white font-semibold">Dashboard da Vercel</span></li>
+                <li>Vá em <span className="text-white font-semibold">Settings &gt; Environment Variables</span></li>
+                <li>Adicione as variáveis <span className="text-white font-mono">VITE_SUPABASE_URL</span> e <span className="text-white font-mono">VITE_SUPABASE_ANON_KEY</span> com seus valores reais</li>
+                <li>Faça um novo <span className="text-white font-semibold">Redeploy</span> do projeto para carregar as novas configurações</li>
+              </ul>
+            </div>
+
+            <div className="border-t border-gray-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <span className="text-xs text-gray-500">
+                Após atualizar o arquivo .env.local, reinicie o servidor local (<code className="bg-black/40 px-1 py-0.5 rounded font-mono">npm run dev</code>).
+              </span>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-[#FF6600] to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg font-medium transition-all shadow-md active:scale-95"
+              >
+                Recarregar Aplicativo
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isAuthLoading) {
     return (
