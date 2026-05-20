@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Employee, Subscription, Category, Transaction, TransactionType, TransactionStatus, PaymentMethod } from '../types';
 import { formatCurrency, generateId } from '../utils';
-import { Users, Plus, Trash2, CreditCard, Laptop, ShoppingBag, DollarSign, Eye, Pencil, X, Save, History } from 'lucide-react';
+import { Users, Plus, Trash2, Laptop, ShoppingBag, DollarSign, Eye, Pencil, X, Save, History } from 'lucide-react';
 import SubscriptionHistoryModal from './SubscriptionHistoryModal';
 
 interface ExpensesViewProps {
@@ -46,6 +46,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   const [viewingHistorySub, setViewingHistorySub] = useState<Subscription | null>(null);
 
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
+  const [isSubModalOpen, setIsSubModalOpen] = useState(false);
 
   const [supplyDesc, setSupplyDesc] = useState('');
   const [supplyCost, setSupplyCost] = useState('');
@@ -83,34 +84,41 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
     };
 
     if (editingSubId) {
-        onUpdateSubscription(subData);
-        setEditingSubId(null);
+      onUpdateSubscription(subData);
     } else {
-        onAddSubscription(subData);
+      onAddSubscription(subData);
     }
-    
-    // Reset Form
+
+    resetSubForm();
+    setIsSubModalOpen(false);
+  };
+
+  const resetSubForm = () => {
+    setEditingSubId(null);
     setSubName('');
     setSubCost('');
     setSubDay('');
     setSubMethod('CARTAO');
   };
 
-  const startEditingSub = (sub: Subscription) => {
-      setSubName(sub.name);
-      setSubCost(sub.cost.toString());
-      setSubDay(sub.renewalDay.toString());
-      setSubMethod(sub.paymentMethod);
-      setEditingSubId(sub.id);
+  const openAddSubModal = () => {
+    resetSubForm();
+    setIsSubModalOpen(true);
   };
 
-  const cancelEditingSub = () => {
-      setEditingSubId(null);
-      setSubName('');
-      setSubCost('');
-      setSubDay('');
-      setSubMethod('CARTAO');
-  }
+  const startEditingSub = (sub: Subscription) => {
+    setSubName(sub.name);
+    setSubCost(sub.cost.toString());
+    setSubDay(sub.renewalDay.toString());
+    setSubMethod(sub.paymentMethod);
+    setEditingSubId(sub.id);
+    setIsSubModalOpen(true);
+  };
+
+  const closeSubModal = () => {
+    resetSubForm();
+    setIsSubModalOpen(false);
+  };
 
   const handleAddSupply = (e: React.FormEvent) => {
     e.preventDefault();
@@ -203,6 +211,75 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
         </div>
       )}
 
+      {/* Modal: Novo / Editar Software */}
+      {isSubModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={closeSubModal}
+          />
+          <div className="relative bg-vybe-card border border-gray-700 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-bar-grow origin-center">
+            <div className="bg-[#2A2A2A] p-4 flex justify-between items-center border-b border-gray-700">
+              <h3 className="text-white font-bold flex items-center gap-2">
+                {editingSubId ? <Pencil className="text-vybe-accent" size={20} /> : <Plus className="text-vybe-accent" size={20} />}
+                {editingSubId ? 'Editar Software' : 'Novo Software'}
+              </h3>
+              <button
+                type="button"
+                onClick={closeSubModal}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSubSubmit} className="p-6 space-y-3">
+              <input
+                value={subName}
+                onChange={e => setSubName(e.target.value)}
+                placeholder="Nome (ex: Adobe, Notion)"
+                className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none"
+                required
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="number"
+                  value={subCost}
+                  onChange={e => setSubCost(e.target.value)}
+                  placeholder="Valor (R$)"
+                  className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none"
+                  required
+                />
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={subDay}
+                  onChange={e => setSubDay(e.target.value)}
+                  placeholder="Dia renovação"
+                  className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none"
+                  required
+                />
+              </div>
+              <select
+                value={subMethod}
+                onChange={e => setSubMethod(e.target.value as PaymentMethod)}
+                className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none cursor-pointer"
+              >
+                <option value="CARTAO">Cartão de Crédito</option>
+                <option value="PIX">PIX</option>
+                <option value="BOLETO">Boleto</option>
+              </select>
+              <button
+                type="submit"
+                className="w-full bg-vybe-accent hover:bg-[#E65C00] text-white font-bold py-3 rounded-lg text-sm transition-colors mt-2 flex items-center justify-center gap-2"
+              >
+                {editingSubId ? <><Save size={16} /> Atualizar</> : 'Cadastrar'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* SECTION 1: EMPLOYEES */}
       <section className="bg-vybe-card border border-gray-800 rounded-xl p-6 shadow-lg">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
@@ -276,125 +353,77 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
             </h2>
             <p className="text-xs text-gray-500 mt-1">Softwares e Ferramentas Recorrentes</p>
           </div>
-          <div className="bg-[#121212] px-4 py-2 rounded-lg border border-gray-700">
-            <span className="text-xs text-gray-400 block">Custo Mensal</span>
-            <span className="text-lg font-bold text-white">{formatCurrency(totalSubs)}</span>
+          <div className="flex items-center gap-3">
+            <div className="bg-[#121212] px-4 py-2 rounded-lg border border-gray-700">
+              <span className="text-xs text-gray-400 block">Custo Mensal</span>
+              <span className="text-lg font-bold text-white">{formatCurrency(totalSubs)}</span>
+            </div>
+            <button
+              type="button"
+              onClick={openAddSubModal}
+              title="Novo software"
+              className="p-3 bg-vybe-accent hover:bg-[#E65C00] text-white rounded-full transition-colors shadow-lg shadow-orange-900/30"
+            >
+              <Plus size={22} />
+            </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          
-          {/* Add/Edit Sub Card */}
-          <div className={`bg-[#121212] p-4 rounded-lg border border-dashed flex flex-col justify-center ${editingSubId ? 'border-vybe-accent bg-vybe-accent/5' : 'border-gray-700'}`}>
-             <div className="flex items-center justify-between mb-3">
-                 <h3 className={`text-sm font-bold flex items-center gap-2 ${editingSubId ? 'text-vybe-accent' : 'text-gray-300'}`}>
-                    {editingSubId ? <Pencil size={16} /> : <Plus size={16} />} 
-                    {editingSubId ? 'Editar Software' : 'Adicionar Software'}
-                 </h3>
-                 {editingSubId && (
-                     <button onClick={cancelEditingSub} className="text-xs text-gray-500 hover:text-white flex items-center gap-1">
-                         <X size={12} /> Cancelar
-                     </button>
-                 )}
-             </div>
-             
-             <form onSubmit={handleSubSubmit} className="space-y-2">
-                <input 
-                    value={subName} 
-                    onChange={e => setSubName(e.target.value)} 
-                    placeholder="Nome (ex: Adobe)" 
-                    className="w-full bg-vybe-card border border-gray-700 rounded p-2 text-xs text-white outline-none focus:border-vybe-accent" 
-                    required 
-                />
-                
-                <div className="grid grid-cols-2 gap-2">
-                    <input 
-                        type="number" 
-                        value={subCost} 
-                        onChange={e => setSubCost(e.target.value)} 
-                        placeholder="Valor (R$)" 
-                        className="w-full bg-vybe-card border border-gray-700 rounded p-2 text-xs text-white outline-none focus:border-vybe-accent" 
-                        required 
-                    />
-                    <input 
-                        type="number"
-                        min="1"
-                        max="31" 
-                        value={subDay} 
-                        onChange={e => setSubDay(e.target.value)} 
-                        placeholder="Dia Renov." 
-                        className="w-full bg-vybe-card border border-gray-700 rounded p-2 text-xs text-white outline-none focus:border-vybe-accent" 
-                        required 
-                    />
-                </div>
-
-                <select
-                    value={subMethod}
-                    onChange={(e) => setSubMethod(e.target.value as PaymentMethod)}
-                    className="w-full bg-vybe-card border border-gray-700 rounded p-2 text-xs text-white outline-none focus:border-vybe-accent cursor-pointer"
-                >
-                    <option value="CARTAO">Cartão de Crédito</option>
-                    <option value="PIX">PIX</option>
-                    <option value="BOLETO">Boleto</option>
-                </select>
-
-                <button 
-                    type="submit" 
-                    className={`w-full font-bold py-2 rounded text-xs mt-2 transition-colors flex items-center justify-center gap-2 ${editingSubId ? 'bg-vybe-green hover:bg-green-600 text-white' : 'bg-vybe-accent hover:bg-[#E65C00] text-white'}`}
-                >
-                    {editingSubId ? ( <><Save size={14} /> Atualizar</> ) : ( 'Salvar' )}
-                </button>
-             </form>
-          </div>
-
-          {/* Sub List */}
+        <div className="space-y-3">
+          {subscriptions.length === 0 && (
+            <p className="text-gray-500 text-sm italic">Nenhum software cadastrado.</p>
+          )}
           {subscriptions.map(sub => (
-            <div key={sub.id} className={`bg-[#121212] p-4 rounded-lg border flex flex-col justify-between group transition-colors relative ${editingSubId === sub.id ? 'border-vybe-accent opacity-50 pointer-events-none' : 'border-gray-800 hover:border-gray-600'}`}>
-               
-               {/* Actions */}
-               <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <button 
-                        onClick={() => setViewingHistorySub(sub)}
-                        className="p-1.5 text-gray-500 hover:text-vybe-accent bg-gray-800 hover:bg-gray-700 rounded transition-colors"
-                        title="Ver Histórico de Pagamentos"
-                    >
-                        <History size={12} />
-                    </button>
-                    <button 
-                        onClick={() => startEditingSub(sub)} 
-                        className="p-1.5 text-gray-500 hover:text-white bg-gray-800 hover:bg-gray-700 rounded transition-colors"
-                        title="Editar"
-                    >
-                        <Pencil size={12} />
-                    </button>
-                    <button 
-                        onClick={() => onDeleteSubscription(sub.id)} 
-                        className="p-1.5 text-gray-500 hover:text-red-500 bg-gray-800 hover:bg-red-900/30 rounded transition-colors"
-                        title="Excluir"
-                    >
-                        <Trash2 size={12} />
-                    </button>
-               </div>
-
-               <div>
-                 <div className="flex items-center gap-2 mb-2">
-                    <div className="bg-vybe-card p-1.5 rounded border border-gray-700">
-                      <CreditCard size={14} className="text-gray-400" />
-                    </div>
-                    <h4 className="font-bold text-white text-sm truncate pr-16">{sub.name}</h4>
-                 </div>
-                 <div className="flex justify-between items-center text-xs text-gray-500 mt-2">
-                    <span>Renova dia {sub.renewalDay}</span>
-                    <span className="px-1.5 py-0.5 bg-gray-800 rounded border border-gray-700 text-[10px] uppercase">{sub.paymentMethod}</span>
-                 </div>
-               </div>
-               
-               <div className="mt-4 flex justify-between items-end border-t border-gray-800 pt-2">
-                  <span className="font-bold text-white">{formatCurrency(sub.cost)}<span className="text-[10px] text-gray-500 font-normal">/mês</span></span>
-                  <button onClick={() => handlePaySub(sub)} className="text-[10px] bg-white/5 hover:bg-white/10 text-white px-2 py-1 rounded border border-gray-700 transition-colors">
-                    Lançar
+            <div
+              key={sub.id}
+              className="flex flex-col md:flex-row justify-between items-center bg-[#121212] p-4 rounded-lg border border-gray-800 hover:border-gray-600 transition-colors"
+            >
+              <div className="flex items-center gap-3 w-full md:w-auto mb-3 md:mb-0">
+                <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center text-gray-400">
+                  <Laptop size={18} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-white text-sm">{sub.name}</h4>
+                  <p className="text-xs text-gray-500">
+                    Renova dia {sub.renewalDay} · {sub.paymentMethod}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+                <div className="text-right">
+                  <span className="block text-xs text-gray-400">Mensal</span>
+                  <span className="block font-bold text-vybe-red text-sm">{formatCurrency(sub.cost)}</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setViewingHistorySub(sub)}
+                    title="Ver histórico"
+                    className="p-2 bg-gray-800 text-gray-400 rounded hover:bg-gray-700 hover:text-white border border-gray-700 transition-colors"
+                  >
+                    <History size={16} />
                   </button>
-               </div>
+                  <button
+                    onClick={() => startEditingSub(sub)}
+                    title="Editar"
+                    className="p-2 bg-gray-800 text-gray-400 rounded hover:bg-gray-700 hover:text-white border border-gray-700 transition-colors"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    onClick={() => handlePaySub(sub)}
+                    title="Lançar pagamento"
+                    className="p-2 bg-green-900/20 text-green-500 rounded hover:bg-green-900/40 border border-green-900/50 transition-colors"
+                  >
+                    <DollarSign size={16} />
+                  </button>
+                  <button
+                    onClick={() => onDeleteSubscription(sub.id)}
+                    className="p-2 bg-red-900/20 text-red-500 rounded hover:bg-red-900/40 border border-red-900/50 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
             </div>
           ))}
         </div>
