@@ -18,6 +18,7 @@ import Login from './components/Login';
 import { Wallet, TrendingUp, TrendingDown, LayoutDashboard, Users, CreditCard, PieChart, Building2, ChevronDown, Loader2 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './src/services/supabase';
 import { api } from './src/services/api';
+import { ensureMonthlyRecurringTransactions } from './src/services/recurringTransactions';
 import { formatCurrency } from './utils';
 
 const App: React.FC = () => {
@@ -100,6 +101,16 @@ const App: React.FC = () => {
 
       const subData = await api.subscriptions.list();
       setSubscriptions(subData);
+
+      const recurringCreated = await ensureMonthlyRecurringTransactions({
+        transactions: transData,
+        clients: clientData,
+        employees: empData,
+        subscriptions: subData,
+      });
+      if (recurringCreated.length > 0) {
+        setTransactions([...recurringCreated, ...transData]);
+      }
 
       // 3. Carregar Configurações da Empresa (Dos metadados do usuário)
       const { data: { user } } = await supabase.auth.getUser();
