@@ -42,19 +42,25 @@ const mapTransactionFromDB = (data: Record<string, unknown>): Transaction => ({
   receiptUrl: (data.receipt_url as string) || undefined,
 });
 
-const mapTransactionToDB = (t: Omit<Transaction, 'id'> | Transaction, userId: string) => ({
-  user_id: userId,
-  description: t.description,
-  amount: t.amount,
-  type: t.type,
-  category: t.category,
-  date: t.date,
-  status: t.status,
-  client_id: t.clientId || null,
-  bank_account_id: t.bankAccountId || null,
-  payment_method: t.paymentMethod,
-  receipt_url: t.receiptUrl || null,
-});
+const mapTransactionToDB = (t: Omit<Transaction, 'id'> | Transaction, userId: string) => {
+  const row: Record<string, unknown> = {
+    user_id: userId,
+    description: t.description,
+    amount: t.amount,
+    type: t.type,
+    category: t.category,
+    date: t.date,
+    status: t.status,
+    client_id: t.clientId || null,
+    payment_method: t.paymentMethod,
+    receipt_url: t.receiptUrl || null,
+  };
+  // Só envia se houver conta — evita erro quando a coluna ainda não existe no Supabase
+  if (t.bankAccountId) {
+    row.bank_account_id = t.bankAccountId;
+  }
+  return row;
+};
 
 const mapClientFromDB = (c: Record<string, unknown>): Client => ({
   id: c.id as string,
