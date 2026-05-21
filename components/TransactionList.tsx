@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType, Category, Client, PaymentMethod, TransactionStatus, BankAccount } from '../types';
+import { getCategoryLabels } from '../src/services/categories';
 import { formatCurrency, formatDate } from '../utils';
 import { Trash2, TrendingUp, TrendingDown, Calendar, Tag, Filter, XCircle, FileText, Briefcase, Building2, QrCode, CreditCard, Barcode, Banknote, CheckCircle, Clock, Paperclip, Pencil } from 'lucide-react';
 
@@ -7,6 +8,7 @@ interface TransactionListProps {
   transactions: Transaction[];
   clients: Client[];
   bankAccounts?: BankAccount[];
+  categoryLabels?: string[];
   onDeleteTransaction: (id: string) => void;
   onEditTransaction?: (transaction: Transaction) => void;
   onGenerateReceipt?: (transaction: Transaction) => void;
@@ -17,6 +19,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
   transactions,
   clients,
   bankAccounts = [],
+  categoryLabels,
   onDeleteTransaction,
   onEditTransaction,
   onGenerateReceipt,
@@ -27,6 +30,12 @@ const TransactionList: React.FC<TransactionListProps> = ({
   const [filterYear, setFilterYear] = useState<string>(String(new Date().getFullYear()));
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterBankAccount, setFilterBankAccount] = useState<string>('all');
+
+  const categoriesForFilter = useMemo(() => {
+    const base = categoryLabels ?? getCategoryLabels();
+    const fromTx = new Set(transactions.map((t) => t.category));
+    return [...new Set([...base, ...fromTx])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [categoryLabels, transactions]);
 
   // Gerar lista de anos disponíveis baseada nas transações + ano atual
   const availableYears = useMemo(() => {
@@ -157,7 +166,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                 className="bg-transparent text-xs text-white p-2 outline-none cursor-pointer border-r border-gray-700"
               >
                 <option value="all">Todas as Categorias</option>
-                {Object.values(Category).map(cat => (
+                {categoriesForFilter.map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>

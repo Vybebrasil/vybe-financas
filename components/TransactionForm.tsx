@@ -1,5 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Category, Transaction, TransactionType, TransactionStatus, Client, PaymentMethod, BankAccount } from '../types';
+import {
+  Category,
+  CategoryConfig,
+  CompanySettings,
+  Transaction,
+  TransactionType,
+  TransactionStatus,
+  Client,
+  PaymentMethod,
+  BankAccount,
+} from '../types';
+import {
+  inferTransactionTypeForCategory,
+  resolveCategories,
+  CLIENT_PAYMENT_LABEL,
+} from '../src/services/categories';
 import { generateId } from '../utils';
 import { PlusCircle, CheckCircle, Clock, Link as LinkIcon, CreditCard, QrCode, Barcode, Banknote, Upload, FileText, X, TrendingUp, TrendingDown, Save } from 'lucide-react';
 import { api } from '../src/services/api';
@@ -13,12 +28,13 @@ interface TransactionFormProps {
   initialData?: {
     description: string;
     amount: number;
-    category: Category;
+    category: string;
     type?: TransactionType;
     clientId?: string;
   } | null;
   clients: Client[];
   bankAccounts?: BankAccount[];
+  companySettings?: CompanySettings;
 }
 
 const TransactionForm: React.FC<TransactionFormProps> = ({
@@ -29,13 +45,20 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
   initialData,
   clients,
   bankAccounts = [],
+  companySettings,
 }) => {
   const toast = useToast();
   const isEditing = Boolean(editingTransaction);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [category, setCategory] = useState<Category>(Category.CLIENT_PAYMENT);
+  const categoryOptions = resolveCategories(companySettings);
+  const defaultCategory =
+    categoryOptions.find((c) => c.label === CLIENT_PAYMENT_LABEL)?.label ??
+    categoryOptions[0]?.label ??
+    Category.CLIENT_PAYMENT;
+
+  const [category, setCategory] = useState<string>(defaultCategory);
   const [type, setType] = useState<TransactionType>(TransactionType.INCOME);
   const [status, setStatus] = useState<TransactionStatus>(TransactionStatus.PAID);
   const [clientId, setClientId] = useState<string>('');
@@ -77,21 +100,9 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
     setBankAccountId(defaultBankAccountId);
   }, [initialData, editingTransaction, defaultBankAccountId]);
 
-  // Business Logic: Auto-assign type based on category
   useEffect(() => {
-    switch (category) {
-      case Category.CLIENT_PAYMENT:
-        setType(TransactionType.INCOME);
-        break;
-      case Category.SALARY:
-      case Category.ADS:
-      case Category.TOOLS:
-        setType(TransactionType.EXPENSE);
-        break;
-      default:
-        break;
-    }
-  }, [category]);
+    setType(inferTransactionTypeForCategory(category, companySettings));
+  }, [category, companySettings]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -217,12 +228,12 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
           <div className="relative">
             <select
               value={category}
-              onChange={(e) => setCategory(e.target.value as Category)}
+              onChange={(e) => setCategory(e.target.value)}
               className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-white focus:outline-none focus:border-vybe-accent focus:ring-1 focus:ring-vybe-accent transition-all appearance-none cursor-pointer"
             >
-              {Object.values(Category).map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
+              {categoryOptions.map((cat: CategoryConfig) => (
+                <option key={cat.id} value={cat.label}>
+                  {cat.label}
                 </option>
               ))}
             </select>

@@ -10,6 +10,7 @@ import {
 import { DashboardSummary } from '../../types';
 import { computeDashboardSummary } from './summary';
 import { getDelinquencyReport } from './delinquency';
+import { isClientPaymentCategory } from './categories';
 import { getCurrentMonthKey } from './recurringLogic';
 
 export type DashboardPeriodPreset = 'this_month' | 'last_month' | 'this_year';
@@ -199,7 +200,7 @@ export function computeMrrVsReceived(
       (t) =>
         t.type === TransactionType.INCOME &&
         t.status === TransactionStatus.PAID &&
-        t.category === Category.CLIENT_PAYMENT &&
+        isClientPaymentCategory(t.category) &&
         t.date.startsWith(monthKey),
     )
     .reduce((s, t) => s + t.amount, 0);

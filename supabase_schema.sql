@@ -85,8 +85,11 @@ CREATE TABLE IF NOT EXISTS company_settings (
   address TEXT,
   service_plans JSONB DEFAULT '[]'::jsonb,
   message_templates JSONB DEFAULT '[]'::jsonb,
+  transaction_categories JSONB DEFAULT '[]'::jsonb,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS transaction_categories JSONB DEFAULT '[]'::jsonb;
 
 ALTER TABLE company_settings ENABLE ROW LEVEL SECURITY;
 

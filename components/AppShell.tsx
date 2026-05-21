@@ -258,11 +258,13 @@ const AppShell: React.FC = () => {
               initialData={preFilledTransaction}
               clients={clients}
               bankAccounts={bankAccounts}
+              companySettings={companySettings}
             />
             <TransactionList
               transactions={transactions}
               clients={clients}
               bankAccounts={bankAccounts}
+              categoryLabels={companySettings.categories?.map((c) => c.label)}
               onDeleteTransaction={handleDeleteTransaction}
               onEditTransaction={handleEditTransaction}
               onGenerateReceipt={handleGenerateReceipt}

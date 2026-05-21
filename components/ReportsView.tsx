@@ -1,7 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useToast } from './ToastProvider';
 import { useAppData } from '../src/context/AppDataContext';
-import { Transaction, TransactionType, Category, Client, TransactionStatus, CompanySettings } from '../types';
+import { Transaction, TransactionType, Client, TransactionStatus, CompanySettings } from '../types';
+import {
+  getCategoryLabels,
+  getCategoryChartColor,
+  isClientPaymentCategory,
+} from '../src/services/categories';
 import { formatCurrency, formatDate } from '../utils';
 import { Printer, TrendingUp, DollarSign, Percent, PieChart, BarChart3, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, AlertCircle, CheckCircle, Clock, Download, X, FileText, Users, UserPlus, UserMinus, Receipt } from 'lucide-react';
 
@@ -17,6 +22,12 @@ type SortDirection = 'asc' | 'desc';
 const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, companySettings }) => {
   const toast = useToast();
   const { reportsDateFilter, setReportsDateFilter, bankAccounts } = useAppData();
+
+  const categoryFilterOptions = useMemo(() => {
+    const base = getCategoryLabels(companySettings);
+    const fromTx = new Set(transactions.map((t) => t.category));
+    return [...new Set([...base, ...fromTx])].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [companySettings, transactions]);
   const currentYear = new Date().getFullYear();
   
   // --- STATE FOR FILTERS ---
@@ -139,7 +150,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
       const namePattern = `mensalidade - ${client.name}`.toLowerCase();
       return (
         t.clientId === client.id ||
-        (t.category === Category.CLIENT_PAYMENT &&
+        (isClientPaymentCategory(t.category) &&
           t.description.toLowerCase().includes(namePattern))
       );
     };
@@ -437,21 +448,11 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
     doc.save(`Relatorio_Vybe_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
-  // Colors for Doughnut
-  const categoryColors: Record<string, string> = {
-    [Category.SALARY]: '#EF4444', 
-    [Category.ADS]: '#F59E0B',
-    [Category.TOOLS]: '#3B82F6', 
-    [Category.SUPPLIES]: '#10B981',
-    [Category.OTHER]: '#8B5CF6',
-    [Category.CLIENT_PAYMENT]: '#6B7280',
-  };
-
   const doughnutGradient = useMemo(() => {
     let currentDeg = 0;
-    const segments = expensesByCategory.data.map(item => {
+    const segments = expensesByCategory.data.map((item, index) => {
       const deg = (item.percentage / 100) * 360;
-      const color = categoryColors[item.category] || '#6B7280';
+      const color = getCategoryChartColor(item.category, index);
       const segment = `${color} ${currentDeg}deg ${currentDeg + deg}deg`;
       currentDeg += deg;
       return segment;
@@ -561,7 +562,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
                  className="w-full bg-[#121212] border border-gray-700 rounded p-2 text-xs text-white focus:border-vybe-accent outline-none cursor-pointer"
                >
                   <option value="all">Todas</option>
-                  {Object.values(Category).map(cat => (
+                  {categoryFilterOptions.map((cat) => (
                      <option key={cat} value={cat}>{cat}</option>
                   ))}
                </select>
@@ -701,7 +702,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
                  {expensesByCategory.data.map((item) => (
                     <div key={item.category} className="flex items-center justify-between text-xs">
                        <div className="flex items-center gap-2">
-                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: categoryColors[item.category] || '#666' }}></span>
+                          <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: getCategoryChartColor(item.category, expensesByCategory.data.indexOf(item)) }}></span>
                           <span className="text-gray-300 print:text-gray-800 truncate">{item.category}</span>
                        </div>
                        <span className="font-bold text-white print:text-black">{formatCurrency(item.amount)}</span>

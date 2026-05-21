@@ -25,7 +25,7 @@ export interface Transaction {
   description: string;
   amount: number;
   type: TransactionType;
-  category: Category;
+  category: string;
   date: string;
   status: TransactionStatus;
   clientId?: string; // Centro de Custo / Cliente vinculado
@@ -118,6 +118,14 @@ export interface TemplateContext {
   companyName: string;
 }
 
+export interface CategoryConfig {
+  id: string;
+  label: string;
+  transactionType: TransactionType;
+  /** Categorias do sistema — usadas em recorrência e régua */
+  locked?: boolean;
+}
+
 export interface CompanySettings {
   name: string;
   cnpj: string;
@@ -127,4 +135,5 @@ export interface CompanySettings {
   address?: string;
   plans?: string[];
   messageTemplates?: MessageTemplate[];
+  categories?: CategoryConfig[];
 }

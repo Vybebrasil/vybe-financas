@@ -1,4 +1,5 @@
-import { CompanySettings, MessageTemplate } from '../../types';
+import { CategoryConfig, CompanySettings, MessageTemplate } from '../../types';
+import { DEFAULT_CATEGORIES } from './categories';
 import { DEFAULT_MESSAGE_TEMPLATES, DEFAULT_SERVICE_PLANS } from '../../constants';
 
 export interface CompanySettingsRow {
@@ -11,6 +12,7 @@ export interface CompanySettingsRow {
   address: string | null;
   service_plans: unknown;
   message_templates: unknown;
+  transaction_categories?: unknown;
 }
 
 export const defaultCompanySettings = (): CompanySettings => ({
@@ -21,6 +23,7 @@ export const defaultCompanySettings = (): CompanySettings => ({
   address: '',
   plans: [...DEFAULT_SERVICE_PLANS],
   messageTemplates: [...DEFAULT_MESSAGE_TEMPLATES],
+  categories: [...DEFAULT_CATEGORIES],
 });
 
 export const mapCompanySettingsFromDB = (row: CompanySettingsRow): CompanySettings => ({
@@ -34,6 +37,9 @@ export const mapCompanySettingsFromDB = (row: CompanySettingsRow): CompanySettin
   messageTemplates: Array.isArray(row.message_templates)
     ? (row.message_templates as MessageTemplate[])
     : [...DEFAULT_MESSAGE_TEMPLATES],
+  categories: Array.isArray(row.transaction_categories)
+    ? (row.transaction_categories as CategoryConfig[])
+    : [...DEFAULT_CATEGORIES],
 });
 
 export const mapCompanySettingsToDB = (userId: string, settings: CompanySettings) => ({
@@ -46,6 +52,7 @@ export const mapCompanySettingsToDB = (userId: string, settings: CompanySettings
   address: settings.address || null,
   service_plans: settings.plans ?? [],
   message_templates: settings.messageTemplates ?? [],
+  transaction_categories: settings.categories ?? DEFAULT_CATEGORIES,
 });
 
 export const mapCompanySettingsFromMetadata = (
@@ -66,5 +73,8 @@ export const mapCompanySettingsFromMetadata = (
     messageTemplates: Array.isArray(metadata.message_templates)
       ? (metadata.message_templates as MessageTemplate[])
       : base.messageTemplates,
+    categories: Array.isArray(metadata.transaction_categories)
+      ? (metadata.transaction_categories as CategoryConfig[])
+      : base.categories,
   };
 };

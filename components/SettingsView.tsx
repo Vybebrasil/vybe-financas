@@ -57,7 +57,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           userEmail={userEmail}
           showAccountEmail
           showPlansManager
+          showCategoriesManager
           showMessageTemplates
+          transactions={transactions}
           syncWhen
         />
         <BankAccountsSection

@@ -23,6 +23,7 @@ import { api } from '../services/api';
 import { supabase } from '../services/supabase';
 import { ensureMonthlyRecurringTransactions } from '../services/recurringTransactions';
 import { computeDashboardSummary } from '../services/summary';
+import { DEFAULT_CATEGORIES } from '../services/categories';
 import { useToast } from '../../components/ToastProvider';
 
 export type AppTab = 'dashboard' | 'finance' | 'clients' | 'expenses' | 'reports' | 'settings';
@@ -30,7 +31,7 @@ export type AppTab = 'dashboard' | 'finance' | 'clients' | 'expenses' | 'reports
 export type PreFilledTransaction = {
   description: string;
   amount: number;
-  category: Category;
+  category: string;
   type?: TransactionType;
   clientId?: string;
   bankAccountId?: string;
@@ -145,6 +146,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     address: '',
     plans: [...DEFAULT_SERVICE_PLANS],
     messageTemplates: [...DEFAULT_MESSAGE_TEMPLATES],
+    categories: [...DEFAULT_CATEGORIES],
   });
   const [isCompanySettingsOpen, setIsCompanySettingsOpen] = useState(false);
 

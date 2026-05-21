@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { CompanySettings } from '../types';
+import { CompanySettings, Transaction } from '../types';
+import CategoriesSection from './CategoriesSection';
+import { DEFAULT_CATEGORIES } from '../src/services/categories';
 import { Save, Image as ImageIcon, Upload, LogOut, Plus, Trash2, Layers } from 'lucide-react';
 import { api } from '../src/services/api';
 import MessageTemplatesSection from './MessageTemplatesSection';
@@ -16,6 +18,8 @@ interface CompanySettingsFormProps {
   showPlansManager?: boolean;
   /** Exibe templates de mensagens (régua de cobrança) */
   showMessageTemplates?: boolean;
+  showCategoriesManager?: boolean;
+  transactions?: Transaction[];
   /** Re-sincroniza o formulário quando o pai reabre (ex.: modal) */
   syncWhen?: boolean;
 }
@@ -29,6 +33,8 @@ const CompanySettingsForm: React.FC<CompanySettingsFormProps> = ({
   showAccountEmail = false,
   showPlansManager = false,
   showMessageTemplates = false,
+  showCategoriesManager = false,
+  transactions = [],
   syncWhen = true,
 }) => {
   const toast = useToast();
@@ -218,6 +224,14 @@ const CompanySettingsForm: React.FC<CompanySettingsFormProps> = ({
             </ul>
           )}
         </div>
+      )}
+
+      {showCategoriesManager && (
+        <CategoriesSection
+          categories={formData.categories ?? [...DEFAULT_CATEGORIES]}
+          transactions={transactions}
+          onChange={(categories) => setFormData({ ...formData, categories })}
+        />
       )}
 
       {showMessageTemplates && (

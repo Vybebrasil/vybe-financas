@@ -1,5 +1,6 @@
-import { Client, Transaction, TransactionType, TransactionStatus, Category } from '../../types';
+import { Client, Transaction, TransactionType, TransactionStatus } from '../../types';
 import { dateInMonth, getCurrentMonthKey, todayIsoDate } from './recurringLogic';
+import { isClientPaymentCategory } from './categories';
 
 export type ClientBillingStatus =
   | 'paid'
@@ -25,7 +26,7 @@ const matchesClientPayment = (client: Client, t: Transaction, monthKey: string):
   const namePattern = `mensalidade - ${client.name}`.toLowerCase();
   return (
     t.clientId === client.id ||
-    (t.category === Category.CLIENT_PAYMENT &&
+    (isClientPaymentCategory(t.category) &&
       t.description.toLowerCase().includes(namePattern))
   );
 };

@@ -213,10 +213,22 @@ export const api = {
             logoUrl: settings.logoUrl,
             service_plans: settings.plans ?? [],
             message_templates: settings.messageTemplates ?? [],
+            transaction_categories: settings.categories ?? [],
           });
           return;
         }
-        throw error;
+        if (error.message?.includes('transaction_categories')) {
+          const { transaction_categories: _tc, ...withoutCategories } = payload as Record<
+            string,
+            unknown
+          >;
+          const retry = await supabase.from('company_settings').upsert(withoutCategories, {
+            onConflict: 'user_id',
+          });
+          if (retry.error) throw retry.error;
+        } else {
+          throw error;
+        }
       }
 
       await api.user.updateMetadata({
@@ -225,6 +237,9 @@ export const api = {
         phone: settings.phone,
         address: settings.address,
         logoUrl: settings.logoUrl,
+        service_plans: settings.plans ?? [],
+        message_templates: settings.messageTemplates ?? [],
+        transaction_categories: settings.categories ?? [],
       });
     },
   },
