@@ -85,6 +85,15 @@ const AppShell: React.FC = () => {
     handleAddBankAccount,
     handleUpdateBankAccount,
     handleDeleteBankAccount,
+    workspaceMembers,
+    workspaceTeamActive,
+    workspaceRole,
+    auditLogs,
+    isLoadingTeam,
+    handleInviteMember,
+    handleRemoveMember,
+    handleUpdateMemberRole,
+    handleRefreshTeam,
     handleOpenBillingModal,
     handleConfirmToFinance,
     handleOpenHistory,
@@ -332,6 +341,15 @@ const AppShell: React.FC = () => {
               onSave={handleUpdateCompanySettings}
               onLogout={handleLogout}
               onBack={() => setActiveTab(tabBeforeSettings)}
+              workspaceMembers={workspaceMembers}
+              workspaceTeamActive={workspaceTeamActive}
+              workspaceRole={workspaceRole}
+              auditLogs={auditLogs}
+              isLoadingTeam={isLoadingTeam}
+              onInviteMember={handleInviteMember}
+              onRemoveMember={handleRemoveMember}
+              onUpdateMemberRole={handleUpdateMemberRole}
+              onRefreshTeam={handleRefreshTeam}
             />
           </Suspense>
         )}

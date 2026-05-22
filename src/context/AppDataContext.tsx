@@ -17,14 +17,24 @@ import {
   TransactionType,
   Category,
   TransactionStatus,
+  WorkspaceMember,
+  AuditLogEntry,
+  WorkspaceRole,
 } from '../../types';
 import { DEFAULT_SERVICE_PLANS, DEFAULT_MESSAGE_TEMPLATES } from '../../constants';
-import { api } from '../services/api';
+import { api, clearWorkspaceCache } from '../services/api';
+import {
+  consumeWorkspaceSetupWarning,
+  getLastBootstrapError,
+  isTeamWorkspaceActive,
+} from '../services/workspace';
+import type { AuditAction } from '../services/auditLog';
 import { supabase } from '../services/supabase';
 import { ensureMonthlyRecurringTransactions } from '../services/recurringTransactions';
 import { computeDashboardSummary } from '../services/summary';
 import { DEFAULT_CATEGORIES } from '../services/categories';
 import { useToast } from '../../components/ToastProvider';
+import { getErrorMessage, isMissingTableError } from '../utils/errorMessage';
 
 export type AppTab = 'dashboard' | 'finance' | 'clients' | 'expenses' | 'reports' | 'settings';
 
@@ -97,6 +107,18 @@ export interface AppDataContextValue {
   handleAddBankAccount: (account: BankAccount) => Promise<void>;
   handleUpdateBankAccount: (account: BankAccount) => Promise<void>;
   handleDeleteBankAccount: (id: string) => void;
+  workspaceMembers: WorkspaceMember[];
+  workspaceTeamActive: boolean;
+  workspaceRole: WorkspaceRole;
+  auditLogs: AuditLogEntry[];
+  isLoadingTeam: boolean;
+  handleInviteMember: (email: string, role: Exclude<WorkspaceRole, 'owner'>) => Promise<void>;
+  handleRemoveMember: (memberId: string) => Promise<void>;
+  handleUpdateMemberRole: (
+    memberId: string,
+    role: Exclude<WorkspaceRole, 'owner'>,
+  ) => Promise<void>;
+  handleRefreshTeam: () => Promise<void>;
   handleOpenBillingModal: (client: Client) => void;
   handleConfirmToFinance: (client: Client) => void;
   handleOpenHistory: (client: Client) => void;
@@ -165,12 +187,69 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     message: string;
     onConfirm: () => void;
   } | null>(null);
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
+  const [workspaceTeamActive, setWorkspaceTeamActive] = useState(false);
+  const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole>('owner');
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [isLoadingTeam, setIsLoadingTeam] = useState(false);
 
   const summary = useMemo(() => computeDashboardSummary(transactions), [transactions]);
+
+  const refreshAuditLogs = useCallback(async () => {
+    try {
+      const logs = await api.audit.list(100);
+      setAuditLogs(logs);
+    } catch {
+      setAuditLogs([]);
+    }
+  }, []);
+
+  const recordAudit = useCallback(
+    async (
+      action: AuditAction,
+      summary: string,
+      entityType?: string,
+      entityId?: string,
+    ) => {
+      await api.audit.log({ action, summary, entityType, entityId });
+      await refreshAuditLogs();
+    },
+    [refreshAuditLogs],
+  );
 
   const fetchData = useCallback(async () => {
     try {
       setIsLoadingData(true);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('Usuário não autenticado');
+      }
+      setUserEmail(user.email || '');
+
+      const ctx = await api.workspace.bootstrap();
+      setWorkspaceRole(ctx.role);
+      setWorkspaceTeamActive(isTeamWorkspaceActive(ctx));
+      setIsLoadingTeam(true);
+      try {
+        const [members, logs] = await Promise.all([
+          api.workspace.listMembers(),
+          api.audit.list(100),
+        ]);
+        setWorkspaceMembers(members);
+        setAuditLogs(logs);
+      } catch (teamErr) {
+        console.warn('Equipe/log indisponíveis:', teamErr);
+        setWorkspaceMembers([]);
+        setAuditLogs([]);
+      } finally {
+        setIsLoadingTeam(false);
+      }
+
+      consumeWorkspaceSetupWarning();
+
       const transData = await api.transactions.list();
       setTransactions(transData);
 
@@ -201,22 +280,24 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
         setTransactions([...recurringCreated, ...transData]);
       }
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        setUserEmail(user.email || '');
-        const settings = await api.companySettings.load();
-        setCompanySettings(settings);
-      }
+      const settings = await api.companySettings.load();
+      setCompanySettings(settings);
     } catch (error: unknown) {
       console.error('Erro ao carregar dados:', error);
-      const msg = error instanceof Error ? error.message : 'Erro desconhecido';
+      const msg = getErrorMessage(error);
       if (msg.includes('não autenticado') || msg.includes('Auth session')) {
         toast.error('Sessão expirada. Faça login novamente.');
         await supabase.auth.signOut();
-      } else if (msg.includes('Could not find the table')) {
-        toast.error('Tabelas do banco não configuradas. Execute o supabase_schema.sql no Supabase.');
+      } else if (
+        msg.includes('Could not find the table') ||
+        msg.includes('does not exist') ||
+        isMissingTableError(error)
+      ) {
+        toast.error(
+          'Tabelas do banco não configuradas. Execute supabase_schema.sql e as migrations em supabase/migrations/ no Supabase.',
+        );
+      } else if (msg.includes('migration') || msg.includes('workspaces_audit')) {
+        toast.error(msg);
       } else {
         toast.error(`Erro ao carregar dados: ${msg}`);
       }
@@ -229,10 +310,26 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (
+        session &&
+        (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')
+      ) {
+        clearWorkspaceCache();
+        fetchData();
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [fetchData]);
+
   const handleUpdateCompanySettings = async (settings: CompanySettings) => {
     setCompanySettings(settings);
     try {
       await api.companySettings.save(settings);
+      await recordAudit('settings.update', 'Configurações da empresa atualizadas');
       toast.success('Configurações salvas com sucesso.');
     } catch (error) {
       console.error('Erro ao salvar configurações:', error);
@@ -252,14 +349,116 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   };
 
   const handleLogout = async () => {
+    clearWorkspaceCache();
     await supabase.auth.signOut();
     setIsCompanySettingsOpen(false);
+    setWorkspaceMembers([]);
+    setAuditLogs([]);
+    setWorkspaceRole('owner');
+    setWorkspaceTeamActive(false);
+  };
+
+  const handleInviteMember = async (
+    email: string,
+    role: Exclude<WorkspaceRole, 'owner'>,
+  ) => {
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed) throw new Error('Informe um e-mail válido.');
+    try {
+      const member = await api.workspace.invite(trimmed, role);
+      setWorkspaceMembers((prev) => {
+        const exists = prev.some(
+          (m) => m.id === member.id || m.email.toLowerCase() === trimmed,
+        );
+        return exists
+          ? prev.map((m) =>
+              m.id === member.id || m.email.toLowerCase() === trimmed ? member : m,
+            )
+          : [...prev, member];
+      });
+      await recordAudit(
+        'member.invite',
+        `Convite para ${trimmed} (${role === 'admin' ? 'admin' : 'membro'})`,
+        'workspace_member',
+        member.id || undefined,
+      );
+      toast.success(
+        'Convite registrado. A pessoa entra ao criar conta ou fazer login com este e-mail.',
+      );
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      toast.error(msg);
+      throw err;
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string) => {
+    const target = workspaceMembers.find((m) => m.id === memberId);
+    askConfirm(
+      'Remover usuário',
+      `Remover ${target?.email ?? 'este usuário'} da conta?`,
+      async () => {
+        await api.workspace.removeMember(memberId);
+        setWorkspaceMembers((prev) => prev.filter((m) => m.id !== memberId));
+        await recordAudit(
+          'member.remove',
+          `Usuário removido: ${target?.email ?? memberId}`,
+          'workspace_member',
+          memberId,
+        );
+        toast.success('Usuário removido.');
+      },
+    );
+  };
+
+  const handleUpdateMemberRole = async (
+    memberId: string,
+    role: Exclude<WorkspaceRole, 'owner'>,
+  ) => {
+    const target = workspaceMembers.find((m) => m.id === memberId);
+    await api.workspace.updateMemberRole(memberId, role);
+    setWorkspaceMembers((prev) =>
+      prev.map((m) => (m.id === memberId ? { ...m, role } : m)),
+    );
+    await recordAudit(
+      'member.role',
+      `Permissão de ${target?.email ?? memberId} alterada para ${role}`,
+      'workspace_member',
+      memberId,
+    );
+    toast.success('Permissão atualizada.');
+  };
+
+  const handleRefreshTeam = async () => {
+    try {
+      const { ctx, members } = await api.workspace.refresh();
+      setWorkspaceRole(ctx.role);
+      setWorkspaceTeamActive(isTeamWorkspaceActive(ctx));
+      setWorkspaceMembers(members);
+      if (isTeamWorkspaceActive(ctx)) {
+        toast.success('Equipe ativada. Você já pode convidar usuários.');
+      } else {
+        toast.error(
+          getLastBootstrapError() ??
+            'Não foi possível ativar a equipe. Confirme o script 009 no Supabase e tente de novo.',
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(getErrorMessage(err));
+    }
   };
 
   const handleAddTransaction = async (transaction: Transaction) => {
     const newTrans = await api.transactions.create(transaction);
     setTransactions((prev) => [newTrans, ...prev]);
     setPreFilledTransaction(null);
+    await recordAudit(
+      'transaction.create',
+      `Lançamento: ${newTrans.description} — R$ ${newTrans.amount.toFixed(2)}`,
+      'transaction',
+      newTrans.id,
+    );
   };
 
   const handleDeleteTransaction = (id: string) => {
@@ -269,9 +468,16 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       onConfirm: async () => {
         setConfirmDialog(null);
         try {
+          const removed = transactions.find((t) => t.id === id);
           await api.transactions.delete(id);
           setTransactions((prev) => prev.filter((t) => t.id !== id));
           if (editingTransaction?.id === id) setEditingTransaction(null);
+          await recordAudit(
+            'transaction.delete',
+            `Excluído: ${removed?.description ?? id}`,
+            'transaction',
+            id,
+          );
         } catch (error) {
           console.error(error);
           toast.error('Erro ao excluir transação.');
@@ -284,6 +490,12 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     const updated = await api.transactions.update(transaction.id, transaction);
     setTransactions((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
     setEditingTransaction(null);
+    await recordAudit(
+      'transaction.update',
+      `Editado: ${updated.description}`,
+      'transaction',
+      updated.id,
+    );
   };
 
   const handleEditTransaction = (transaction: Transaction) => {
@@ -308,6 +520,12 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
 
     try {
       await api.transactions.updateStatus(id, newStatus);
+      await recordAudit(
+        'transaction.status',
+        `${transaction.description}: ${newStatus === TransactionStatus.PAID ? 'pago' : 'pendente'}`,
+        'transaction',
+        id,
+      );
     } catch (error) {
       console.error(error);
       toast.error('Erro ao atualizar status.');
@@ -322,6 +540,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       const { id: _id, ...rest } = client;
       const newClient = await api.clients.create(rest);
       setClients((prev) => [newClient, ...prev]);
+      await recordAudit('client.create', `Cliente: ${newClient.name}`, 'client', newClient.id);
     } catch (error) {
       console.error(error);
       toast.error('Erro ao adicionar cliente.');
@@ -333,6 +552,12 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       await api.clients.update(updatedClient.id, updatedClient);
       setClients((prev) => prev.map((c) => (c.id === updatedClient.id ? updatedClient : c)));
       setEditingClient(null);
+      await recordAudit(
+        'client.update',
+        `Cliente editado: ${updatedClient.name}`,
+        'client',
+        updatedClient.id,
+      );
     } catch (error) {
       console.error(error);
       toast.error('Erro ao atualizar cliente.');
@@ -342,9 +567,16 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   const handleDeleteClient = (id: string) => {
     askConfirm('Excluir cliente', 'Tem certeza que deseja excluir este cliente?', async () => {
       try {
+        const removed = clients.find((c) => c.id === id);
         await api.clients.delete(id);
         setClients((prev) => prev.filter((c) => c.id !== id));
         if (editingClient?.id === id) setEditingClient(null);
+        await recordAudit(
+          'client.delete',
+          `Cliente excluído: ${removed?.name ?? id}`,
+          'client',
+          id,
+        );
         toast.success('Cliente excluído.');
       } catch (error) {
         console.error(error);
@@ -358,6 +590,12 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       const { id: _id, ...rest } = emp;
       const newEmp = await api.employees.create(rest);
       setEmployees((prev) => [...prev, newEmp]);
+      await recordAudit(
+        'employee.create',
+        `Colaborador: ${newEmp.name}`,
+        'employee',
+        newEmp.id,
+      );
     } catch (error) {
       console.error(error);
       toast.error('Erro ao adicionar funcionário.');
@@ -367,9 +605,16 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   const handleDeleteEmployee = (id: string) => {
     askConfirm('Remover funcionário', 'Deseja remover este funcionário?', async () => {
       try {
+        const removed = employees.find((e) => e.id === id);
         await api.employees.delete(id);
         setEmployees((prev) => prev.filter((e) => e.id !== id));
         if (selectedEmployee?.id === id) setSelectedEmployee(null);
+        await recordAudit(
+          'employee.delete',
+          `Colaborador removido: ${removed?.name ?? id}`,
+          'employee',
+          id,
+        );
         toast.success('Funcionário removido.');
       } catch (error) {
         console.error(error);
@@ -385,6 +630,12 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
         prev.map((e) => (e.id === updatedEmployee.id ? updatedEmployee : e)),
       );
       setSelectedEmployee(updatedEmployee);
+      await recordAudit(
+        'employee.update',
+        `Colaborador editado: ${updatedEmployee.name}`,
+        'employee',
+        updatedEmployee.id,
+      );
     } catch (error) {
       console.error(error);
       toast.error('Erro ao atualizar funcionário.');
@@ -401,6 +652,12 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       const { id: _id, ...rest } = sub;
       const newSub = await api.subscriptions.create(rest);
       setSubscriptions((prev) => [...prev, newSub]);
+      await recordAudit(
+        'subscription.create',
+        `Assinatura: ${newSub.name}`,
+        'subscription',
+        newSub.id,
+      );
     } catch (error) {
       console.error(error);
       toast.error('Erro ao adicionar assinatura.');
@@ -413,6 +670,12 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       setSubscriptions((prev) =>
         prev.map((s) => (s.id === updatedSub.id ? updatedSub : s)),
       );
+      await recordAudit(
+        'subscription.update',
+        `Assinatura editada: ${updatedSub.name}`,
+        'subscription',
+        updatedSub.id,
+      );
     } catch (error) {
       console.error(error);
       toast.error('Erro ao atualizar assinatura.');
@@ -422,8 +685,15 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   const handleDeleteSubscription = (id: string) => {
     askConfirm('Remover assinatura', 'Deseja remover esta assinatura?', async () => {
       try {
+        const removed = subscriptions.find((s) => s.id === id);
         await api.subscriptions.delete(id);
         setSubscriptions((prev) => prev.filter((s) => s.id !== id));
+        await recordAudit(
+          'subscription.delete',
+          `Assinatura removida: ${removed?.name ?? id}`,
+          'subscription',
+          id,
+        );
         toast.success('Assinatura removida.');
       } catch (error) {
         console.error(error);
@@ -442,22 +712,41 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     const { id: _id, ...payload } = account;
     const created = await api.bankAccounts.create(payload);
     setBankAccounts((prev) => [...prev, created]);
+    await recordAudit(
+      'bank_account.create',
+      `Conta: ${created.name}`,
+      'bank_account',
+      created.id,
+    );
     toast.success('Conta bancária adicionada.');
   };
 
   const handleUpdateBankAccount = async (account: BankAccount) => {
     await api.bankAccounts.update(account.id, account);
     setBankAccounts((prev) => prev.map((a) => (a.id === account.id ? account : a)));
+    await recordAudit(
+      'bank_account.update',
+      `Conta editada: ${account.name}`,
+      'bank_account',
+      account.id,
+    );
     toast.success('Conta atualizada.');
   };
 
   const handleDeleteBankAccount = (id: string) => {
     askConfirm('Excluir conta', 'Lançamentos vinculados ficarão sem conta. Continuar?', async () => {
       try {
+        const removed = bankAccounts.find((a) => a.id === id);
         await api.bankAccounts.delete(id);
         setBankAccounts((prev) => prev.filter((a) => a.id !== id));
         setTransactions((prev) =>
           prev.map((t) => (t.bankAccountId === id ? { ...t, bankAccountId: undefined } : t)),
+        );
+        await recordAudit(
+          'bank_account.delete',
+          `Conta removida: ${removed?.name ?? id}`,
+          'bank_account',
+          id,
         );
         toast.success('Conta removida.');
       } catch (error) {
@@ -567,6 +856,15 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     handleAddBankAccount,
     handleUpdateBankAccount,
     handleDeleteBankAccount,
+    workspaceMembers,
+    workspaceTeamActive,
+    workspaceRole,
+    auditLogs,
+    isLoadingTeam,
+    handleInviteMember,
+    handleRemoveMember,
+    handleUpdateMemberRole,
+    handleRefreshTeam,
     handleOpenBillingModal,
     handleConfirmToFinance,
     handleOpenHistory,

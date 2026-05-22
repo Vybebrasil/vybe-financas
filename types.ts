@@ -126,6 +126,32 @@ export interface CategoryConfig {
   locked?: boolean;
 }
 
+export type WorkspaceRole = 'owner' | 'admin' | 'member';
+
+export interface WorkspaceMember {
+  id: string;
+  workspaceId: string;
+  userId?: string;
+  email: string;
+  role: WorkspaceRole;
+  status: 'pending' | 'active';
+  invitedAt?: string;
+  joinedAt?: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  workspaceId: string;
+  actorUserId?: string;
+  actorEmail?: string;
+  action: string;
+  entityType?: string;
+  entityId?: string;
+  summary: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface CompanySettings {
   name: string;
   cnpj: string;

@@ -5,6 +5,7 @@ import ResetPasswordForm from './components/ResetPasswordForm';
 import AppShell from './components/AppShell';
 import { AppDataProvider } from './src/context/AppDataContext';
 import { supabase, isSupabaseConfigured } from './src/services/supabase';
+import { clearWorkspaceCache } from './src/services/workspace';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -27,6 +28,9 @@ const App: React.FC = () => {
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         setNeedsPasswordReset(true);
+      }
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        clearWorkspaceCache();
       }
       setIsAuthenticated(!!session);
     });

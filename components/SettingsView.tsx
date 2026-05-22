@@ -1,6 +1,15 @@
 import React from 'react';
-import { BankAccount, CompanySettings, Transaction } from '../types';
+import {
+  AuditLogEntry,
+  BankAccount,
+  CompanySettings,
+  Transaction,
+  WorkspaceMember,
+  WorkspaceRole,
+} from '../types';
 import BankAccountsSection from './BankAccountsSection';
+import TeamSection from './TeamSection';
+import AuditLogSection from './AuditLogSection';
 import { ArrowLeft, Settings } from 'lucide-react';
 import CompanySettingsForm from './CompanySettingsForm';
 
@@ -15,6 +24,18 @@ interface SettingsViewProps {
   onSave: (settings: CompanySettings) => Promise<void> | void;
   onLogout?: () => void;
   onBack: () => void;
+  workspaceMembers: WorkspaceMember[];
+  workspaceTeamActive?: boolean;
+  workspaceRole: WorkspaceRole;
+  auditLogs: AuditLogEntry[];
+  isLoadingTeam?: boolean;
+  onInviteMember: (email: string, role: Exclude<WorkspaceRole, 'owner'>) => Promise<void>;
+  onRemoveMember: (memberId: string) => Promise<void>;
+  onUpdateMemberRole: (
+    memberId: string,
+    role: Exclude<WorkspaceRole, 'owner'>,
+  ) => Promise<void>;
+  onRefreshTeam?: () => Promise<void>;
 }
 
 const SettingsView: React.FC<SettingsViewProps> = ({
@@ -28,6 +49,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onSave,
   onLogout,
   onBack,
+  workspaceMembers,
+  workspaceTeamActive = false,
+  workspaceRole,
+  auditLogs,
+  isLoadingTeam,
+  onInviteMember,
+  onRemoveMember,
+  onUpdateMemberRole,
+  onRefreshTeam,
 }) => {
   return (
     <div className="max-w-3xl mx-auto">
@@ -69,6 +99,17 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           onUpdate={onUpdateBankAccount}
           onDelete={onDeleteBankAccount}
         />
+        <TeamSection
+          members={workspaceMembers}
+          teamEnabled={workspaceTeamActive}
+          currentUserEmail={userEmail ?? ''}
+          currentRole={workspaceRole}
+          onInvite={onInviteMember}
+          onRemove={onRemoveMember}
+          onRoleChange={onUpdateMemberRole}
+          onRefreshTeam={onRefreshTeam}
+        />
+        <AuditLogSection logs={auditLogs} isLoading={isLoadingTeam} />
       </section>
     </div>
   );

@@ -175,3 +175,41 @@ CREATE POLICY "logos_update" ON storage.objects FOR UPDATE
   USING (bucket_id = 'logos' AND (storage.foldername(name))[1] = auth.uid()::text);
 CREATE POLICY "logos_delete" ON storage.objects FOR DELETE
   USING (bucket_id = 'logos' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ========== Workspace + equipe + log de ações (ver migration 20260520000005) ==========
+-- Conta compartilhada: migrations em supabase/migrations/ (005–011)
+-- Se convite falhar com "infinite recursion": rode 20260520000011_fix_members_rls_recursion.sql
+
+CREATE TABLE IF NOT EXISTS workspaces (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL DEFAULT 'Minha empresa',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS workspaces_owner_id_idx ON workspaces(owner_id);
+
+CREATE TABLE IF NOT EXISTS workspace_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  email TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active')),
+  invited_at TIMESTAMPTZ DEFAULT NOW(),
+  joined_at TIMESTAMPTZ,
+  UNIQUE(workspace_id, email)
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  actor_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  actor_email TEXT,
+  action TEXT NOT NULL,
+  entity_type TEXT,
+  entity_id TEXT,
+  summary TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);

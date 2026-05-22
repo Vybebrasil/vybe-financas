@@ -16,6 +16,17 @@ import {
   mapCompanySettingsToDB,
   type CompanySettingsRow,
 } from './companySettingsMapper';
+import { requireWorkspace, clearWorkspaceCache } from './workspace';
+import {
+  listWorkspaceMembers,
+  inviteWorkspaceMember,
+  removeWorkspaceMember,
+  updateMemberRole,
+  refreshTeamWorkspace,
+} from './workspace';
+import { listAuditLogs, logAudit } from './auditLog';
+
+export { clearWorkspaceCache };
 
 const requireUser = async () => {
   // getSession é síncrono com o storage local — evita race após login (comum em produção)
@@ -119,9 +130,9 @@ const mapSubscriptionFromDB = (s: Record<string, unknown>): Subscription => ({
 });
 
 const uploadStorageFile = async (bucket: 'receipts' | 'logos', file: File): Promise<string> => {
-  const user = await requireUser();
+  const { ownerId } = await requireWorkspace();
   const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-  const path = `${user.id}/${Date.now()}.${ext}`;
+  const path = `${ownerId}/${Date.now()}.${ext}`;
 
   const { error } = await supabase.storage.from(bucket).upload(path, file, {
     cacheControl: '3600',
@@ -161,7 +172,7 @@ const mapSubscriptionToDB = (s: Omit<Subscription, 'id'>, userId: string) => ({
 export const api = {
   user: {
     async updateMetadata(metadata: Record<string, unknown>) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { error } = await supabase.auth.updateUser({
         data: { ...user.user_metadata, ...metadata },
       });
@@ -171,11 +182,11 @@ export const api = {
 
   companySettings: {
     async load(): Promise<CompanySettings> {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { data, error } = await supabase
         .from('company_settings')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .maybeSingle();
 
       if (error) {
@@ -197,8 +208,8 @@ export const api = {
     },
 
     async save(settings: CompanySettings): Promise<void> {
-      const user = await requireUser();
-      const payload = mapCompanySettingsToDB(user.id, settings);
+      const { user, ownerId } = await requireWorkspace();
+      const payload = mapCompanySettingsToDB(ownerId, settings);
       const { error } = await supabase.from('company_settings').upsert(payload, {
         onConflict: 'user_id',
       });
@@ -246,11 +257,11 @@ export const api = {
 
   transactions: {
     async list() {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { data, error } = await supabase
         .from('transactions')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .order('date', { ascending: false });
 
       if (error) throw error;
@@ -258,8 +269,8 @@ export const api = {
     },
 
     async create(transaction: Omit<Transaction, 'id'> | Transaction) {
-      const user = await requireUser();
-      const payload = mapTransactionToDB(transaction, user.id);
+      const { user, ownerId } = await requireWorkspace();
+      const payload = mapTransactionToDB(transaction, ownerId);
 
       const { data, error } = await supabase
         .from('transactions')
@@ -272,35 +283,35 @@ export const api = {
     },
 
     async delete(id: string) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { error } = await supabase
         .from('transactions')
         .delete()
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (error) throw error;
     },
 
     async updateStatus(id: string, newStatus: TransactionStatus) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { error } = await supabase
         .from('transactions')
         .update({ status: newStatus })
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (error) throw error;
     },
 
     async update(id: string, transaction: Transaction) {
-      const user = await requireUser();
-      const payload = mapTransactionToDB(transaction, user.id);
+      const { user, ownerId } = await requireWorkspace();
+      const payload = mapTransactionToDB(transaction, ownerId);
       const { data, error } = await supabase
         .from('transactions')
         .update(payload)
         .eq('id', id)
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .select()
         .single();
 
@@ -316,11 +327,11 @@ export const api = {
 
   recurring: {
     async hasGenerated(monthKey: string): Promise<boolean> {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { data, error } = await supabase
         .from('recurring_generation_log')
         .select('month_key')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .eq('month_key', monthKey)
         .maybeSingle();
 
@@ -335,10 +346,10 @@ export const api = {
     },
 
     async markGenerated(monthKey: string, transactionsCount: number): Promise<void> {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { error } = await supabase.from('recurring_generation_log').upsert(
         {
-          user_id: user.id,
+          user_id: ownerId,
           month_key: monthKey,
           transactions_count: transactionsCount,
         },
@@ -359,21 +370,21 @@ export const api = {
 
   clients: {
     async list() {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { data, error } = await supabase
         .from('clients')
         .select('*')
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (error) throw error;
       return (data ?? []).map(mapClientFromDB);
     },
 
     async create(client: Omit<Client, 'id'>) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { data, error } = await supabase
         .from('clients')
-        .insert([mapClientToDB(client, user.id)])
+        .insert([mapClientToDB(client, ownerId)])
         .select()
         .single();
 
@@ -382,23 +393,23 @@ export const api = {
     },
 
     async update(id: string, client: Client) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { error } = await supabase
         .from('clients')
-        .update(mapClientToDB(client, user.id))
+        .update(mapClientToDB(client, ownerId))
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (error) throw error;
     },
 
     async delete(id: string) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { error } = await supabase
         .from('clients')
         .delete()
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (error) throw error;
     },
@@ -406,21 +417,21 @@ export const api = {
 
   employees: {
     async list() {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { data, error } = await supabase
         .from('employees')
         .select('*')
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (error) throw error;
       return (data ?? []).map(mapEmployeeFromDB);
     },
 
     async create(employee: Omit<Employee, 'id'>) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { data, error } = await supabase
         .from('employees')
-        .insert([mapEmployeeToDB(employee, user.id)])
+        .insert([mapEmployeeToDB(employee, ownerId)])
         .select()
         .single();
 
@@ -429,23 +440,23 @@ export const api = {
     },
 
     async update(id: string, employee: Employee) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { error } = await supabase
         .from('employees')
-        .update(mapEmployeeToDB(employee, user.id))
+        .update(mapEmployeeToDB(employee, ownerId))
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (error) throw error;
     },
 
     async delete(id: string) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { error } = await supabase
         .from('employees')
         .delete()
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (error) throw error;
     },
@@ -453,11 +464,11 @@ export const api = {
 
   bankAccounts: {
     async list() {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { data, error } = await supabase
         .from('bank_accounts')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', ownerId)
         .order('is_default', { ascending: false })
         .order('name');
 
@@ -466,16 +477,16 @@ export const api = {
     },
 
     async create(account: Omit<BankAccount, 'id'>) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       if (account.isDefault) {
         await supabase
           .from('bank_accounts')
           .update({ is_default: false })
-          .eq('user_id', user.id);
+          .eq('user_id', ownerId);
       }
       const { data, error } = await supabase
         .from('bank_accounts')
-        .insert([mapBankAccountToDB(account, user.id)])
+        .insert([mapBankAccountToDB(account, ownerId)])
         .select()
         .single();
 
@@ -484,30 +495,30 @@ export const api = {
     },
 
     async update(id: string, account: BankAccount) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       if (account.isDefault) {
         await supabase
           .from('bank_accounts')
           .update({ is_default: false })
-          .eq('user_id', user.id)
+          .eq('user_id', ownerId)
           .neq('id', id);
       }
       const { error } = await supabase
         .from('bank_accounts')
-        .update(mapBankAccountToDB(account, user.id))
+        .update(mapBankAccountToDB(account, ownerId))
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (error) throw error;
     },
 
     async delete(id: string) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { error } = await supabase
         .from('bank_accounts')
         .delete()
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (error) throw error;
     },
@@ -515,21 +526,21 @@ export const api = {
 
   subscriptions: {
     async list() {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { data, error } = await supabase
         .from('subscriptions')
         .select('*')
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (error) throw error;
       return (data ?? []).map(mapSubscriptionFromDB);
     },
 
     async create(subscription: Omit<Subscription, 'id'>) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { data, error } = await supabase
         .from('subscriptions')
-        .insert([mapSubscriptionToDB(subscription, user.id)])
+        .insert([mapSubscriptionToDB(subscription, ownerId)])
         .select()
         .single();
 
@@ -538,25 +549,39 @@ export const api = {
     },
 
     async update(id: string, subscription: Subscription) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { error } = await supabase
         .from('subscriptions')
-        .update(mapSubscriptionToDB(subscription, user.id))
+        .update(mapSubscriptionToDB(subscription, ownerId))
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (error) throw error;
     },
 
     async delete(id: string) {
-      const user = await requireUser();
+      const { user, ownerId } = await requireWorkspace();
       const { error } = await supabase
         .from('subscriptions')
         .delete()
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', ownerId);
 
       if (error) throw error;
     },
+  },
+
+  workspace: {
+    bootstrap: () => requireWorkspace(),
+    refresh: refreshTeamWorkspace,
+    listMembers: listWorkspaceMembers,
+    invite: inviteWorkspaceMember,
+    removeMember: removeWorkspaceMember,
+    updateMemberRole,
+  },
+
+  audit: {
+    log: logAudit,
+    list: listAuditLogs,
   },
 };
