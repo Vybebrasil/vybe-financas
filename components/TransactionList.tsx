@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType, Category, Client, PaymentMethod, TransactionStatus, BankAccount } from '../types';
 import { getCategoryLabels } from '../src/services/categories';
 import { formatCurrency, formatDate } from '../utils';
-import { Trash2, TrendingUp, TrendingDown, Calendar, Tag, Filter, XCircle, FileText, Briefcase, Building2, QrCode, CreditCard, Barcode, Banknote, CheckCircle, Clock, Paperclip, Pencil } from 'lucide-react';
+import { Trash2, TrendingUp, TrendingDown, Calendar, Tag, Filter, XCircle, FileText, Briefcase, QrCode, CreditCard, Barcode, Banknote, CheckCircle, Clock, Paperclip, Pencil } from 'lucide-react';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -199,7 +199,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
         </div>
       </div>
 
-      <div className="overflow-x-auto min-h-[300px]">
+      <div className="overflow-x-auto lg:overflow-x-visible min-h-[300px]">
         {filteredTransactions.length === 0 ? (
           <div className="text-center py-12 flex flex-col items-center justify-center text-vybe-muted">
             <div className="bg-[#121212] p-4 rounded-full mb-3">
@@ -211,16 +211,16 @@ const TransactionList: React.FC<TransactionListProps> = ({
             )}
           </div>
         ) : (
-          <table className="w-full text-left border-collapse table-fixed md:table-auto">
+          <table className="w-full text-left border-collapse table-fixed">
             <thead>
-              <tr className="bg-[#2A2A2A] text-vybe-muted text-xs uppercase tracking-wider">
-                <th className="p-4 font-semibold w-[40%] md:w-auto">Descrição</th>
-                <th className="p-4 font-semibold text-right md:text-left whitespace-nowrap w-[25%] md:w-auto">Valor</th>
-                <th className="p-4 font-semibold hidden lg:table-cell w-[20%]">Cliente</th>
-                <th className="p-4 font-semibold hidden md:table-cell w-[10%]">Categoria</th>
-                <th className="p-4 font-semibold hidden sm:table-cell w-[10%]">Data</th>
-                <th className="p-4 font-semibold hidden md:table-cell text-center w-[10%]">Status</th>
-                <th className="p-4 font-semibold text-center w-[15%] md:w-24">Ações</th>
+              <tr className="bg-[#2A2A2A] text-vybe-muted text-[10px] uppercase tracking-wider">
+                <th className="px-2 py-2.5 font-semibold min-w-0">Descrição</th>
+                <th className="px-2 py-2.5 font-semibold text-right w-[5.25rem]">Valor</th>
+                <th className="px-2 py-2.5 font-semibold hidden lg:table-cell w-[5.5rem]">Cliente</th>
+                <th className="px-2 py-2.5 font-semibold hidden md:table-cell w-[5rem]">Cat.</th>
+                <th className="px-2 py-2.5 font-semibold hidden sm:table-cell w-[4.75rem]">Data</th>
+                <th className="px-1 py-2.5 font-semibold hidden md:table-cell text-center w-10">St.</th>
+                <th className="px-1 py-2.5 font-semibold text-center w-[6.75rem]">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -232,18 +232,18 @@ const TransactionList: React.FC<TransactionListProps> = ({
                     key={transaction.id}
                     className={`border-b border-gray-800 hover:bg-[#252525] transition-colors group ${transaction.status === TransactionStatus.PENDING ? 'bg-amber-500/[0.03]' : ''}`}
                   >
-                    <td className="p-4 align-top md:align-middle">
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
+                    <td className="px-2 py-2.5 align-top md:align-middle overflow-hidden">
+                      <div className="flex flex-col min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           {transaction.status === TransactionStatus.PENDING && (
                             <span
-                              className="shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400"
+                              className="shrink-0 flex items-center justify-center w-4 h-4 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400"
                               title="Pendente"
                             >
-                              <Clock size={12} />
+                              <Clock size={10} />
                             </span>
                           )}
-                          <span className={`font-medium truncate max-w-[150px] sm:max-w-[200px] md:max-w-xs ${transaction.status === TransactionStatus.PENDING ? 'text-amber-100' : 'text-white'}`} title={transaction.description}>
+                          <span className={`font-medium text-sm truncate block min-w-0 ${transaction.status === TransactionStatus.PENDING ? 'text-amber-100' : 'text-white'}`} title={transaction.description}>
                             {transaction.description}
                           </span>
                         </div>
@@ -291,14 +291,14 @@ const TransactionList: React.FC<TransactionListProps> = ({
                       </div>
                     </td>
 
-                    <td className="p-4 text-right md:text-left align-top md:align-middle whitespace-nowrap">
-                      <div className="flex items-center justify-end md:justify-start gap-1 md:gap-2">
+                    <td className="px-2 py-2.5 text-right align-top md:align-middle whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-0.5">
                         {transaction.type === TransactionType.INCOME ? (
-                          <TrendingUp size={14} className="text-vybe-green shrink-0 hidden md:block" />
+                          <TrendingUp size={12} className="text-vybe-green shrink-0 hidden sm:block" />
                         ) : (
-                          <TrendingDown size={14} className="text-vybe-red shrink-0 hidden md:block" />
+                          <TrendingDown size={12} className="text-vybe-red shrink-0 hidden sm:block" />
                         )}
-                        <span className={`font-semibold text-sm md:text-base ${transaction.type === TransactionType.INCOME ? 'text-vybe-green' : 'text-vybe-red'}`}>
+                        <span className={`font-semibold text-xs sm:text-sm tabular-nums ${transaction.type === TransactionType.INCOME ? 'text-vybe-green' : 'text-vybe-red'}`}>
                           {transaction.type === TransactionType.EXPENSE ? '- ' : '+ '}
                           {formatCurrency(transaction.amount)}
                         </span>
@@ -307,51 +307,51 @@ const TransactionList: React.FC<TransactionListProps> = ({
 
                     {/* Desktop Columns */}
 
-                    <td className="p-4 hidden lg:table-cell align-middle">
+                    <td className="px-2 py-2.5 hidden lg:table-cell align-middle overflow-hidden">
                       {client ? (
-                        <div className="flex items-center gap-2 text-xs text-gray-300 group/client" title={client.name}>
-                          <div className="w-6 h-6 rounded bg-[#121212] border border-gray-700 flex items-center justify-center text-gray-500 shrink-0">
-                            <Building2 size={12} />
-                          </div>
-                          <span className="truncate max-w-[140px]">{client.name}</span>
-                        </div>
+                        <span className="text-[11px] text-gray-300 truncate block" title={client.name}>
+                          {client.name}
+                        </span>
                       ) : (
                         <span className="text-gray-700 text-xs">-</span>
                       )}
                     </td>
 
-                    <td className="p-4 hidden md:table-cell align-middle">
-                      <span className="inline-block px-2 py-1 bg-[#121212] rounded text-xs border border-gray-700 text-gray-400 truncate max-w-[120px]" title={transaction.category}>
+                    <td className="px-2 py-2.5 hidden md:table-cell align-middle overflow-hidden">
+                      <span className="block text-[10px] text-gray-400 truncate" title={transaction.category}>
                         {transaction.category}
                       </span>
                     </td>
 
-                    <td className="p-4 hidden sm:table-cell text-sm text-gray-400 align-middle whitespace-nowrap">
+                    <td className="px-2 py-2.5 hidden sm:table-cell text-[11px] text-gray-400 align-middle whitespace-nowrap tabular-nums">
                       {formatDate(transaction.date)}
                     </td>
 
-                    <td className="p-4 hidden md:table-cell text-center align-middle">
+                    <td className="px-1 py-2.5 hidden md:table-cell text-center align-middle">
                       <button
                         onClick={() => onToggleStatus(transaction.id)}
-                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold border transition-all ${getStatusClasses(transaction.status)}`}
-                        title="Clique para alterar o status"
+                        className={`inline-flex items-center justify-center p-1 rounded-md border transition-all ${getStatusClasses(transaction.status)}`}
+                        title={transaction.status === TransactionStatus.PAID ? 'Pago — clique para pendente' : 'Pendente — clique para pago'}
                       >
-                        {getStatusButtonContent(transaction.status)}
+                        {transaction.status === TransactionStatus.PAID ? (
+                          <CheckCircle size={14} />
+                        ) : (
+                          <Clock size={14} />
+                        )}
                       </button>
                     </td>
 
-                    <td className="p-4 text-center align-middle">
-                      <div className="flex items-center justify-center gap-1 md:gap-2">
-                        {/* Botão de Recibo (Download/View) */}
+                    <td className="px-1 py-2.5 text-center align-middle">
+                      <div className="flex items-center justify-center gap-0.5 shrink-0">
                         {transaction.receiptUrl && (
                           <a
                             href={transaction.receiptUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="p-1.5 md:p-2 text-blue-400 hover:text-white hover:bg-blue-400/20 bg-blue-400/10 rounded-lg transition-all"
-                            title="Ver Comprovante Anexado"
+                            className="p-1 text-blue-400 hover:text-white hover:bg-blue-400/20 bg-blue-400/10 rounded transition-all"
+                            title="Ver comprovante"
                           >
-                            <Paperclip size={16} />
+                            <Paperclip size={14} />
                           </a>
                         )}
 
@@ -359,27 +359,29 @@ const TransactionList: React.FC<TransactionListProps> = ({
                           <button
                             type="button"
                             onClick={() => onEditTransaction(transaction)}
-                            className="p-1.5 md:p-2 text-gray-400 hover:text-white hover:bg-gray-700 bg-gray-800 rounded-lg transition-all"
-                            title="Editar transação"
+                            className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 bg-gray-800 rounded transition-all"
+                            title="Editar"
                           >
-                            <Pencil size={16} />
+                            <Pencil size={14} />
                           </button>
                         )}
                         {onGenerateReceipt && (
                           <button
+                            type="button"
                             onClick={() => onGenerateReceipt(transaction)}
-                            className="p-1.5 md:p-2 text-vybe-accent hover:text-white hover:bg-vybe-accent bg-vybe-accent/10 rounded-lg transition-all"
-                            title="Gerar Recibo (PDF)"
+                            className="p-1 text-vybe-accent hover:text-white hover:bg-vybe-accent bg-vybe-accent/10 rounded transition-all"
+                            title="Recibo PDF"
                           >
-                            <FileText size={16} />
+                            <FileText size={14} />
                           </button>
                         )}
                         <button
+                          type="button"
                           onClick={() => onDeleteTransaction(transaction.id)}
-                          className="p-1.5 md:p-2 text-red-500 hover:text-white hover:bg-red-500 bg-red-500/10 rounded-lg transition-all"
-                          title="Excluir Transação"
+                          className="p-1 text-red-500 hover:text-white hover:bg-red-500 bg-red-500/10 rounded transition-all"
+                          title="Excluir"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </td>
