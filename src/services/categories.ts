@@ -44,14 +44,26 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
 ];
 
 export function resolveCategories(settings?: CompanySettings | null): CategoryConfig[] {
-  const custom = settings?.categories;
+  const custom = settings?.categories?.filter((c) => c.label?.trim());
   if (!custom?.length) return [...DEFAULT_CATEGORIES];
 
   const byId = new Map<string, CategoryConfig>();
   for (const c of DEFAULT_CATEGORIES) byId.set(c.id, { ...c });
+
   for (const c of custom) {
-    if (c.id && c.label?.trim()) byId.set(c.id, c);
+    const label = c.label.trim();
+    const id =
+      c.id ||
+      DEFAULT_CATEGORIES.find((d) => d.label === label)?.id ||
+      `custom-${label.toLowerCase().replace(/\s+/g, '-')}`;
+    byId.set(id, {
+      ...c,
+      id,
+      label,
+      locked: c.locked ?? DEFAULT_CATEGORIES.find((d) => d.id === id)?.locked ?? false,
+    });
   }
+
   return [...byId.values()];
 }
 

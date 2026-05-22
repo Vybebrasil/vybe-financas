@@ -2,6 +2,7 @@ import React from 'react';
 import {
   AuditLogEntry,
   BankAccount,
+  CategoryConfig,
   CompanySettings,
   Transaction,
   WorkspaceMember,
@@ -22,6 +23,7 @@ interface SettingsViewProps {
   onUpdateBankAccount: (account: BankAccount) => Promise<void>;
   onDeleteBankAccount: (id: string) => void;
   onSave: (settings: CompanySettings) => Promise<void> | void;
+  onPersistCategories?: (categories: CategoryConfig[]) => Promise<void>;
   onLogout?: () => void;
   onBack: () => void;
   workspaceMembers: WorkspaceMember[];
@@ -47,6 +49,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onUpdateBankAccount,
   onDeleteBankAccount,
   onSave,
+  onPersistCategories,
   onLogout,
   onBack,
   workspaceMembers,
@@ -83,6 +86,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         <CompanySettingsForm
           settings={settings}
           onSave={onSave}
+          onPersistCategories={onPersistCategories}
           onLogout={onLogout}
           userEmail={userEmail}
           showAccountEmail

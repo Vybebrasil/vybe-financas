@@ -9,11 +9,15 @@ import {
   TransactionStatus,
   CompanySettings,
   BankAccount,
+  CategoryConfig,
 } from '../../types';
 import {
   mapCompanySettingsFromDB,
   mapCompanySettingsFromMetadata,
   mapCompanySettingsToDB,
+  categoriesForStorage,
+  mergeCategoryLists,
+  normalizeCategoriesFromStorage,
   type CompanySettingsRow,
 } from './companySettingsMapper';
 import { requireWorkspace, clearWorkspaceCache } from './workspace';
@@ -196,7 +200,14 @@ export const api = {
         throw error;
       }
 
-      if (data) return mapCompanySettingsFromDB(data as CompanySettingsRow);
+      if (data) {
+        const fromDb = mapCompanySettingsFromDB(data as CompanySettingsRow);
+        const fromMeta = mapCompanySettingsFromMetadata(user.user_metadata);
+        return {
+          ...fromDb,
+          categories: mergeCategoryLists(fromDb.categories, fromMeta.categories),
+        };
+      }
 
       const fromMetadata = mapCompanySettingsFromMetadata(user.user_metadata);
       try {
@@ -207,51 +218,98 @@ export const api = {
       return fromMetadata;
     },
 
+    async saveCategories(categories: CategoryConfig[] | undefined): Promise<CategoryConfig[]> {
+      const { user, ownerId } = await requireWorkspace();
+      const stored = categoriesForStorage(categories);
+
+      const { data: existing, error: fetchErr } = await supabase
+        .from('company_settings')
+        .select('user_id, name')
+        .eq('user_id', ownerId)
+        .maybeSingle();
+
+      if (fetchErr && fetchErr.code !== 'PGRST205' && !fetchErr.message?.includes('does not exist')) {
+        throw fetchErr;
+      }
+
+      let savedRaw: unknown;
+
+      if (existing) {
+        const { data, error } = await supabase
+          .from('company_settings')
+          .update({ transaction_categories: stored })
+          .eq('user_id', ownerId)
+          .select('transaction_categories')
+          .single();
+        if (error) throw error;
+        savedRaw = data?.transaction_categories;
+      } else {
+        const companyName =
+          (user.user_metadata?.company_name as string) || 'Minha Agência';
+        const { data, error } = await supabase
+          .from('company_settings')
+          .insert({
+            user_id: ownerId,
+            name: companyName,
+            transaction_categories: stored,
+          })
+          .select('transaction_categories')
+          .single();
+        if (error) throw error;
+        savedRaw = data?.transaction_categories;
+      }
+
+      const saved = normalizeCategoriesFromStorage(savedRaw);
+      if (saved.length < stored.length) {
+        throw new Error('As categorias não foram gravadas no servidor. Tente novamente.');
+      }
+
+      if (ownerId === user.id) {
+        await api.user.updateMetadata({ transaction_categories: stored });
+      }
+
+      return saved;
+    },
+
     async save(settings: CompanySettings): Promise<void> {
       const { user, ownerId } = await requireWorkspace();
-      const payload = mapCompanySettingsToDB(ownerId, settings);
+      const categories = await api.companySettings.saveCategories(settings.categories);
+      const payload = mapCompanySettingsToDB(ownerId, { ...settings, categories });
       const { error } = await supabase.from('company_settings').upsert(payload, {
         onConflict: 'user_id',
       });
 
       if (error) {
         if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
-          await api.user.updateMetadata({
-            company_name: settings.name,
-            cnpj: settings.cnpj,
-            phone: settings.phone,
-            address: settings.address,
-            logoUrl: settings.logoUrl,
-            service_plans: settings.plans ?? [],
-            message_templates: settings.messageTemplates ?? [],
-            transaction_categories: settings.categories ?? [],
-          });
+          if (ownerId === user.id) {
+            await api.user.updateMetadata({
+              company_name: settings.name,
+              cnpj: settings.cnpj,
+              phone: settings.phone,
+              address: settings.address,
+              logoUrl: settings.logoUrl,
+              service_plans: settings.plans ?? [],
+              message_templates: settings.messageTemplates ?? [],
+              transaction_categories: categories,
+            });
+          }
           return;
         }
-        if (error.message?.includes('transaction_categories')) {
-          const { transaction_categories: _tc, ...withoutCategories } = payload as Record<
-            string,
-            unknown
-          >;
-          const retry = await supabase.from('company_settings').upsert(withoutCategories, {
-            onConflict: 'user_id',
-          });
-          if (retry.error) throw retry.error;
-        } else {
-          throw error;
-        }
+        throw error;
       }
 
-      await api.user.updateMetadata({
-        company_name: settings.name,
-        cnpj: settings.cnpj,
-        phone: settings.phone,
-        address: settings.address,
-        logoUrl: settings.logoUrl,
-        service_plans: settings.plans ?? [],
-        message_templates: settings.messageTemplates ?? [],
-        transaction_categories: settings.categories ?? [],
-      });
+      if (ownerId === user.id) {
+        await api.user.updateMetadata({
+          company_name: settings.name,
+          cnpj: settings.cnpj,
+          phone: settings.phone,
+          address: settings.address,
+          logoUrl: settings.logoUrl,
+          service_plans: settings.plans ?? [],
+          message_templates: settings.messageTemplates ?? [],
+          transaction_categories: categories,
+        });
+      }
     },
   },
 

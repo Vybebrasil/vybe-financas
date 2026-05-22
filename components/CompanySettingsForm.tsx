@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { CompanySettings, Transaction } from '../types';
+import { CategoryConfig, CompanySettings, Transaction } from '../types';
 import CategoriesSection from './CategoriesSection';
-import { DEFAULT_CATEGORIES } from '../src/services/categories';
+import { DEFAULT_CATEGORIES, resolveCategories } from '../src/services/categories';
+import { categoriesForStorage } from '../src/services/companySettingsMapper';
 import { Save, Image as ImageIcon, Upload, LogOut, Plus, Trash2, Layers } from 'lucide-react';
 import { api } from '../src/services/api';
 import MessageTemplatesSection from './MessageTemplatesSection';
@@ -20,6 +21,8 @@ interface CompanySettingsFormProps {
   showMessageTemplates?: boolean;
   showCategoriesManager?: boolean;
   transactions?: Transaction[];
+  /** Salva categorias no servidor ao editar a lista */
+  onPersistCategories?: (categories: CategoryConfig[]) => Promise<void>;
   /** Re-sincroniza o formulário quando o pai reabre (ex.: modal) */
   syncWhen?: boolean;
 }
@@ -35,6 +38,7 @@ const CompanySettingsForm: React.FC<CompanySettingsFormProps> = ({
   showMessageTemplates = false,
   showCategoriesManager = false,
   transactions = [],
+  onPersistCategories,
   syncWhen = true,
 }) => {
   const toast = useToast();
@@ -88,7 +92,14 @@ const CompanySettingsForm: React.FC<CompanySettingsFormProps> = ({
         if (uploadedUrl) finalLogoUrl = uploadedUrl;
       }
 
-      await onSave({ ...formData, logoUrl: finalLogoUrl });
+      const categoriesToSave = showCategoriesManager
+        ? formData.categories
+        : resolveCategories(settings);
+      await onSave({
+        ...formData,
+        logoUrl: finalLogoUrl,
+        categories: categoriesForStorage(categoriesToSave),
+      });
       setLogoFile(null);
       onSaved?.();
     } catch (error: unknown) {
@@ -231,6 +242,7 @@ const CompanySettingsForm: React.FC<CompanySettingsFormProps> = ({
           categories={formData.categories ?? [...DEFAULT_CATEGORIES]}
           transactions={transactions}
           onChange={(categories) => setFormData({ ...formData, categories })}
+          onPersist={onPersistCategories}
         />
       )}
 

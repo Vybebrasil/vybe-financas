@@ -37,9 +37,7 @@ export const mapCompanySettingsFromDB = (row: CompanySettingsRow): CompanySettin
   messageTemplates: Array.isArray(row.message_templates)
     ? (row.message_templates as MessageTemplate[])
     : [...DEFAULT_MESSAGE_TEMPLATES],
-  categories: Array.isArray(row.transaction_categories)
-    ? (row.transaction_categories as CategoryConfig[])
-    : [...DEFAULT_CATEGORIES],
+  categories: normalizeCategoriesFromStorage(row.transaction_categories),
 });
 
 export const mapCompanySettingsToDB = (userId: string, settings: CompanySettings) => ({
@@ -52,7 +50,7 @@ export const mapCompanySettingsToDB = (userId: string, settings: CompanySettings
   address: settings.address || null,
   service_plans: settings.plans ?? [],
   message_templates: settings.messageTemplates ?? [],
-  transaction_categories: settings.categories ?? DEFAULT_CATEGORIES,
+  transaction_categories: categoriesForStorage(settings.categories),
 });
 
 export const mapCompanySettingsFromMetadata = (
@@ -73,8 +71,58 @@ export const mapCompanySettingsFromMetadata = (
     messageTemplates: Array.isArray(metadata.message_templates)
       ? (metadata.message_templates as MessageTemplate[])
       : base.messageTemplates,
-    categories: Array.isArray(metadata.transaction_categories)
-      ? (metadata.transaction_categories as CategoryConfig[])
-      : base.categories,
+    categories: normalizeCategoriesFromStorage(metadata.transaction_categories) ?? base.categories,
   };
 };
+
+/** JSONB `[]` ou ausente → padrões; evita dropdown sem categorias customizadas. */
+export function normalizeCategoriesFromStorage(
+  raw: unknown,
+): CategoryConfig[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [...DEFAULT_CATEGORIES];
+  return raw.filter(
+    (c): c is CategoryConfig =>
+      Boolean(c && typeof c === 'object' && typeof (c as CategoryConfig).label === 'string'),
+  );
+}
+
+export function categoriesForStorage(
+  categories: CategoryConfig[] | undefined,
+): CategoryConfig[] {
+  if (!categories?.length) return [...DEFAULT_CATEGORIES];
+  return categories;
+}
+
+/** Une listas (banco + metadata + formulário) sem perder categorias customizadas. */
+export function mergeCategoryLists(
+  ...lists: (CategoryConfig[] | undefined)[]
+): CategoryConfig[] {
+  const map = new Map<string, CategoryConfig>();
+
+  for (const list of lists) {
+    for (const c of list ?? []) {
+      if (!c?.label?.trim()) continue;
+      const label = c.label.trim();
+      const id =
+        c.id ||
+        DEFAULT_CATEGORIES.find((d) => d.label === label)?.id ||
+        `custom-${label.toLowerCase().replace(/\s+/g, '-')}`;
+      const txType =
+        c.transactionType ??
+        (c as { transaction_type?: CategoryConfig['transactionType'] }).transaction_type;
+      map.set(id, {
+        ...c,
+        id,
+        label,
+        transactionType: txType ?? DEFAULT_CATEGORIES.find((d) => d.id === id)?.transactionType ?? c.transactionType,
+        locked: c.locked ?? DEFAULT_CATEGORIES.find((d) => d.id === id)?.locked ?? false,
+      });
+    }
+  }
+
+  for (const d of DEFAULT_CATEGORIES) {
+    if (!map.has(d.id)) map.set(d.id, { ...d });
+  }
+
+  return map.size > 0 ? [...map.values()] : [...DEFAULT_CATEGORIES];
+}

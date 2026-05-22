@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Category,
   CategoryConfig,
@@ -52,7 +52,10 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const categoryOptions = resolveCategories(companySettings);
+  const categoryOptions = useMemo(
+    () => resolveCategories(companySettings),
+    [companySettings],
+  );
   const defaultCategory =
     categoryOptions.find((c) => c.label === CLIENT_PAYMENT_LABEL)?.label ??
     categoryOptions[0]?.label ??

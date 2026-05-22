@@ -20,6 +20,7 @@ import {
   WorkspaceMember,
   AuditLogEntry,
   WorkspaceRole,
+  CategoryConfig,
 } from '../../types';
 import { DEFAULT_SERVICE_PLANS, DEFAULT_MESSAGE_TEMPLATES } from '../../constants';
 import { api, clearWorkspaceCache } from '../services/api';
@@ -88,6 +89,7 @@ export interface AppDataContextValue {
   fetchData: () => Promise<void>;
   handleLogout: () => Promise<void>;
   handleUpdateCompanySettings: (settings: CompanySettings) => Promise<void>;
+  handlePersistCategories: (categories: CategoryConfig[]) => Promise<void>;
   askConfirm: (title: string, message: string, onConfirm: () => void | Promise<void>) => void;
   handleAddTransaction: (transaction: Transaction) => Promise<void>;
   handleDeleteTransaction: (id: string) => void;
@@ -325,10 +327,16 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     return () => subscription.unsubscribe();
   }, [fetchData]);
 
+  const handlePersistCategories = useCallback(async (categories: CategoryConfig[]) => {
+    const saved = await api.companySettings.saveCategories(categories);
+    setCompanySettings((prev) => ({ ...prev, categories: saved }));
+  }, []);
+
   const handleUpdateCompanySettings = async (settings: CompanySettings) => {
-    setCompanySettings(settings);
     try {
       await api.companySettings.save(settings);
+      const fresh = await api.companySettings.load();
+      setCompanySettings(fresh);
       await recordAudit('settings.update', 'Configurações da empresa atualizadas');
       toast.success('Configurações salvas com sucesso.');
     } catch (error) {
@@ -837,6 +845,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     fetchData,
     handleLogout,
     handleUpdateCompanySettings,
+    handlePersistCategories,
     askConfirm,
     handleAddTransaction,
     handleDeleteTransaction,

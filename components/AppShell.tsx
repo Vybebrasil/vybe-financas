@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useAppData } from '../src/context/AppDataContext';
 import { DEFAULT_SERVICE_PLANS, DEFAULT_MESSAGE_TEMPLATES } from '../constants';
+import { getCategoryLabels } from '../src/services/categories';
 import DashboardView from './DashboardView';
 import TransactionForm from './TransactionForm';
 import TransactionList from './TransactionList';
@@ -66,6 +67,7 @@ const AppShell: React.FC = () => {
     setConfirmDialog,
     handleLogout,
     handleUpdateCompanySettings,
+    handlePersistCategories,
     handleAddTransaction,
     handleDeleteTransaction,
     handleUpdateTransaction,
@@ -273,7 +275,7 @@ const AppShell: React.FC = () => {
               transactions={transactions}
               clients={clients}
               bankAccounts={bankAccounts}
-              categoryLabels={companySettings.categories?.map((c) => c.label)}
+              categoryLabels={getCategoryLabels(companySettings)}
               onDeleteTransaction={handleDeleteTransaction}
               onEditTransaction={handleEditTransaction}
               onGenerateReceipt={handleGenerateReceipt}
@@ -339,6 +341,7 @@ const AppShell: React.FC = () => {
               onUpdateBankAccount={handleUpdateBankAccount}
               onDeleteBankAccount={handleDeleteBankAccount}
               onSave={handleUpdateCompanySettings}
+              onPersistCategories={handlePersistCategories}
               onLogout={handleLogout}
               onBack={() => setActiveTab(tabBeforeSettings)}
               workspaceMembers={workspaceMembers}

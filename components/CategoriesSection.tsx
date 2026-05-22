@@ -9,12 +9,15 @@ interface CategoriesSectionProps {
   categories: CategoryConfig[];
   transactions: Transaction[];
   onChange: (categories: CategoryConfig[]) => void;
+  /** Grava no Supabase ao adicionar/editar/remover (não depende só do botão Salvar). */
+  onPersist?: (categories: CategoryConfig[]) => Promise<void>;
 }
 
 const CategoriesSection: React.FC<CategoriesSectionProps> = ({
   categories,
   transactions,
   onChange,
+  onPersist,
 }) => {
   const toast = useToast();
   const [newLabel, setNewLabel] = useState('');
@@ -23,6 +26,17 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({
   const [editLabel, setEditLabel] = useState('');
 
   const list = categories.length > 0 ? categories : [...DEFAULT_CATEGORIES];
+
+  const applyCategories = async (next: CategoryConfig[]) => {
+    onChange(next);
+    if (!onPersist) return;
+    try {
+      await onPersist(next);
+    } catch (err: unknown) {
+      console.error('Erro ao salvar categorias:', err);
+      toast.error('Não foi possível salvar as categorias. Tente novamente.');
+    }
+  };
 
   const countUsage = (label: string) =>
     transactions.filter((t) => t.category === label).length;
@@ -34,7 +48,7 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({
       toast.info('Já existe uma categoria com esse nome.');
       return;
     }
-    onChange([
+    void applyCategories([
       ...list,
       {
         id: generateId(),
@@ -66,7 +80,7 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({
         `${usage} lançamento(s) usam o nome antigo. O histórico mantém "${cat.label}" até você editar cada lançamento.`,
       );
     }
-    onChange(list.map((c) => (c.id === cat.id ? { ...c, label } : c)));
+    void applyCategories(list.map((c) => (c.id === cat.id ? { ...c, label } : c)));
     setEditingId(null);
   };
 
@@ -77,7 +91,7 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({
       toast.error(`Não é possível remover: ${usage} lançamento(s) usam esta categoria.`);
       return;
     }
-    onChange(list.filter((c) => c.id !== cat.id));
+    void applyCategories(list.filter((c) => c.id !== cat.id));
   };
 
   const toggleType = (cat: CategoryConfig) => {
@@ -86,7 +100,7 @@ const CategoriesSection: React.FC<CategoriesSectionProps> = ({
       cat.transactionType === TransactionType.INCOME
         ? TransactionType.EXPENSE
         : TransactionType.INCOME;
-    onChange(list.map((c) => (c.id === cat.id ? { ...c, transactionType: next } : c)));
+    void applyCategories(list.map((c) => (c.id === cat.id ? { ...c, transactionType: next } : c)));
   };
 
   return (
