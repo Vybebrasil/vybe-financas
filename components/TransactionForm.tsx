@@ -7,6 +7,7 @@ import {
   TransactionType,
   TransactionStatus,
   Client,
+  Employee,
   PaymentMethod,
   BankAccount,
 } from '../types';
@@ -16,7 +17,7 @@ import {
   CLIENT_PAYMENT_LABEL,
 } from '../src/services/categories';
 import { generateId } from '../utils';
-import { PlusCircle, CheckCircle, Clock, Link as LinkIcon, CreditCard, QrCode, Barcode, Banknote, Upload, FileText, X, TrendingUp, TrendingDown, Save } from 'lucide-react';
+import { PlusCircle, CheckCircle, Clock, Link as LinkIcon, Users, CreditCard, QrCode, Barcode, Banknote, Upload, FileText, X, TrendingUp, TrendingDown, Save } from 'lucide-react';
 import { api } from '../src/services/api';
 import { useToast } from './ToastProvider';
 
@@ -31,8 +32,10 @@ interface TransactionFormProps {
     category: string;
     type?: TransactionType;
     clientId?: string;
+    employeeId?: string;
   } | null;
   clients: Client[];
+  employees?: Employee[];
   bankAccounts?: BankAccount[];
   companySettings?: CompanySettings;
 }
@@ -44,6 +47,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
   onCancelEdit,
   initialData,
   clients,
+  employees = [],
   bankAccounts = [],
   companySettings,
 }) => {
@@ -65,6 +69,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
   const [type, setType] = useState<TransactionType>(TransactionType.INCOME);
   const [status, setStatus] = useState<TransactionStatus>(TransactionStatus.PAID);
   const [clientId, setClientId] = useState<string>('');
+  const [employeeId, setEmployeeId] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
   const [bankAccountId, setBankAccountId] = useState<string>('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -84,6 +89,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
       setType(editingTransaction.type);
       setStatus(editingTransaction.status);
       setClientId(editingTransaction.clientId ?? '');
+      setEmployeeId(editingTransaction.employeeId ?? '');
       setPaymentMethod(editingTransaction.paymentMethod);
       setBankAccountId(editingTransaction.bankAccountId ?? '');
       setReceiptFile(null);
@@ -95,6 +101,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
       setCategory(initialData.category);
       setType(initialData.type ?? TransactionType.INCOME);
       setClientId(initialData.clientId ?? '');
+      setEmployeeId(initialData.employeeId ?? '');
       setBankAccountId(initialData.bankAccountId ?? defaultBankAccountId);
       setDate(new Date().toISOString().split('T')[0]);
       setStatus(TransactionStatus.PAID);
@@ -106,6 +113,12 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
   useEffect(() => {
     setType(inferTransactionTypeForCategory(category, companySettings));
   }, [category, companySettings]);
+
+  useEffect(() => {
+    if (type !== TransactionType.EXPENSE) {
+      setEmployeeId('');
+    }
+  }, [type]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -140,6 +153,8 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
         date,
         status,
         clientId: clientId || undefined,
+        employeeId:
+          type === TransactionType.EXPENSE && employeeId ? employeeId : undefined,
         bankAccountId: bankAccountId || undefined,
         paymentMethod,
         receiptUrl: receiptUrl || undefined,
@@ -153,6 +168,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
         setDescription('');
         setAmount('');
         setClientId('');
+        setEmployeeId('');
         setType(TransactionType.INCOME);
         setStatus(TransactionStatus.PAID);
         setPaymentMethod('PIX');
@@ -362,6 +378,27 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
             </select>
           </div>
         </div>
+
+        {type === TransactionType.EXPENSE && employees.length > 0 && (
+          <div className="lg:col-span-3">
+            <label className="block text-xs text-vybe-muted mb-1 font-medium">Vincular Colaborador</label>
+            <div className="relative">
+              <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+              <select
+                value={employeeId}
+                onChange={(e) => setEmployeeId(e.target.value)}
+                className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 pl-9 text-white focus:outline-none focus:border-vybe-accent transition-all appearance-none cursor-pointer"
+              >
+                <option value="">-- Nenhum --</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
 
         {/* Receipt Upload */}
         <div className="lg:col-span-12">

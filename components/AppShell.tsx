@@ -268,6 +268,7 @@ const AppShell: React.FC = () => {
               onCancelEdit={() => setEditingTransaction(null)}
               initialData={preFilledTransaction}
               clients={clients}
+              employees={employees}
               bankAccounts={bankAccounts}
               companySettings={companySettings}
             />

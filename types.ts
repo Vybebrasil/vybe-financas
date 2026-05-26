@@ -29,6 +29,7 @@ export interface Transaction {
   date: string;
   status: TransactionStatus;
   clientId?: string; // Centro de Custo / Cliente vinculado
+  employeeId?: string; // Colaborador vinculado (despesas)
   bankAccountId?: string;
   paymentMethod: PaymentMethod;
   receiptUrl?: string;
@@ -70,6 +71,8 @@ export interface Employee {
   name: string;
   role: string;
   salary: number;
+  /** Bônus do mês (somado ao salário no cálculo "A pagar") */
+  bonus?: number;
   pixKey: string;
   paymentDay: number;
   observations?: string;

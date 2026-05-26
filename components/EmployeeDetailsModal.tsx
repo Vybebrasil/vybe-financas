@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Employee, Transaction, TransactionType } from '../types';
 import { formatCurrency, formatDate } from '../utils';
+import { computeEmployeeAmountToPay } from '../src/services/employeePayroll';
 import { X, User, Save, Edit2, FileText, DollarSign, Calendar, CreditCard, TrendingDown } from 'lucide-react';
 
 interface EmployeeDetailsModalProps {
@@ -33,15 +34,21 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
   const history = useMemo(() => {
     if (!employee) return [];
     const term = employee.name.toLowerCase();
-    return transactions.filter(t => 
-      t.description.toLowerCase().includes(term) && 
-      t.type === TransactionType.EXPENSE
-    );
+    return transactions.filter((t) => {
+      if (t.type !== TransactionType.EXPENSE) return false;
+      if (t.employeeId === employee.id) return true;
+      return t.description.toLowerCase().includes(term);
+    });
   }, [employee, transactions]);
 
   const totalPaid = useMemo(() => {
     return history.reduce((acc, curr) => acc + curr.amount, 0);
   }, [history]);
+
+  const payroll = useMemo(() => {
+    if (!employee) return null;
+    return computeEmployeeAmountToPay(employee, transactions);
+  }, [employee, transactions]);
 
   if (!isOpen || !formData || !employee) return null;
 
@@ -142,7 +149,7 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                                             type="number"
                                             className="w-full bg-vybe-card border border-gray-700 rounded p-2 text-sm text-white focus:border-vybe-accent outline-none"
                                             value={formData.salary}
-                                            onChange={e => setFormData({...formData, salary: parseFloat(e.target.value)})}
+                                            onChange={e => setFormData({...formData, salary: parseFloat(e.target.value) || 0})}
                                         />
                                     ) : (
                                         <div className="flex items-center gap-1 text-vybe-green font-bold text-sm">
@@ -150,6 +157,39 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                                         </div>
                                     )}
                                 </div>
+                                <div>
+                                    <label className="text-xs text-gray-500 block mb-1">Bônus (mês)</label>
+                                    {isEditing ? (
+                                        <input 
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            className="w-full bg-vybe-card border border-gray-700 rounded p-2 text-sm text-white focus:border-vybe-accent outline-none"
+                                            value={formData.bonus ?? 0}
+                                            onChange={e => setFormData({...formData, bonus: parseFloat(e.target.value) || 0})}
+                                        />
+                                    ) : (
+                                        <div className="flex items-center gap-1 text-white text-sm">
+                                            <DollarSign size={12} /> {formatCurrency(formData.bonus ?? 0)}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {payroll && (
+                              <div className="bg-[#1E1E1E] rounded-lg border border-amber-900/30 p-3 space-y-1">
+                                <div className="flex justify-between text-xs">
+                                  <span className="text-gray-500">Despesas vinculadas (mês)</span>
+                                  <span className="text-gray-300">− {formatCurrency(payroll.linkedExpenses)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm font-bold border-t border-gray-700 pt-2">
+                                  <span className="text-amber-400/90">A pagar</span>
+                                  <span className="text-amber-400">{formatCurrency(payroll.amountToPay)}</span>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-1 gap-3">
                                 <div>
                                     <label className="text-xs text-gray-500 block mb-1">Dia Pagto.</label>
                                     {isEditing ? (

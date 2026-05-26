@@ -45,6 +45,7 @@ export type PreFilledTransaction = {
   category: string;
   type?: TransactionType;
   clientId?: string;
+  employeeId?: string;
   bankAccountId?: string;
 };
 
@@ -793,6 +794,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       amount: transaction.amount,
       category: transaction.category,
       type: transaction.type,
+      employeeId: transaction.employeeId,
     });
     setActiveTab('finance');
     window.scrollTo({ top: 0, behavior: 'smooth' });

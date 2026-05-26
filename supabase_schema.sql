@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   date TIMESTAMPTZ DEFAULT NOW(),
   status TEXT NOT NULL,
   client_id UUID,
+  employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
   payment_method TEXT,
   receipt_url TEXT,
   bank_account_id UUID
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS employees (
   name TEXT NOT NULL,
   role TEXT NOT NULL,
   salary NUMERIC NOT NULL,
+  bonus NUMERIC NOT NULL DEFAULT 0,
   pix_key TEXT,
   payment_day INTEGER,
   observations TEXT

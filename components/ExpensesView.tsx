@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Employee, Subscription, Category, Transaction, TransactionType, TransactionStatus, PaymentMethod } from '../types';
 import { formatCurrency, generateId } from '../utils';
+import { computeEmployeeAmountToPay } from '../src/services/employeePayroll';
 import { Users, Plus, Trash2, Laptop, ShoppingBag, DollarSign, Eye, Pencil, X, Save, History } from 'lucide-react';
 import SubscriptionHistoryModal from './SubscriptionHistoryModal';
 
@@ -34,6 +35,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   const [newEmpRole, setNewEmpRole] = useState('');
   const [newEmpSalary, setNewEmpSalary] = useState('');
   const [newEmpPix, setNewEmpPix] = useState('');
+  const [newEmpBonus, setNewEmpBonus] = useState('');
 
   // Subscription State (Add & Edit)
   const [subName, setSubName] = useState('');
@@ -60,12 +62,14 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
       name: newEmpName,
       role: newEmpRole,
       salary: parseFloat(newEmpSalary),
+      bonus: newEmpBonus ? parseFloat(newEmpBonus) : 0,
       pixKey: newEmpPix,
       paymentDay: 5, // Default
     });
     setNewEmpName('');
     setNewEmpRole('');
     setNewEmpSalary('');
+    setNewEmpBonus('');
     setNewEmpPix('');
     setIsAddEmployeeOpen(false);
   };
@@ -138,15 +142,17 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   };
 
   const handlePayEmployee = (emp: Employee) => {
+    const { amountToPay } = computeEmployeeAmountToPay(emp, transactions);
     onQuickExpense({
       id: generateId(),
       description: `Salário - ${emp.name}`,
-      amount: emp.salary,
+      amount: amountToPay,
       category: Category.SALARY,
       type: TransactionType.EXPENSE,
       date: new Date().toISOString().split('T')[0],
       status: TransactionStatus.PAID,
       paymentMethod: 'PIX',
+      employeeId: emp.id,
     });
   };
 
@@ -164,6 +170,20 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   };
 
   const totalSubs = subscriptions.reduce((acc, curr) => acc + curr.cost, 0);
+
+  const employeePayrollRows = useMemo(
+    () =>
+      employees.map((emp) => ({
+        employee: emp,
+        payroll: computeEmployeeAmountToPay(emp, transactions),
+      })),
+    [employees, transactions],
+  );
+
+  const totalAmountToPay = useMemo(
+    () => employeePayrollRows.reduce((sum, row) => sum + row.payroll.amountToPay, 0),
+    [employeePayrollRows],
+  );
 
   return (
     <div className="space-y-8 animate-bar-grow origin-top">
@@ -201,6 +221,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
               <input value={newEmpName} onChange={e => setNewEmpName(e.target.value)} placeholder="Nome Completo" className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none" required />
               <input value={newEmpRole} onChange={e => setNewEmpRole(e.target.value)} placeholder="Cargo" className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none" />
               <input type="number" value={newEmpSalary} onChange={e => setNewEmpSalary(e.target.value)} placeholder="Salário (R$)" className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none" required />
+              <input type="number" min="0" step="0.01" value={newEmpBonus} onChange={e => setNewEmpBonus(e.target.value)} placeholder="Bônus do mês (R$, opcional)" className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none" />
               <input value={newEmpPix} onChange={e => setNewEmpPix(e.target.value)} placeholder="Chave PIX" className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none" />
               <button type="submit" className="w-full bg-vybe-accent hover:bg-[#E65C00] text-white font-bold py-3 rounded-lg text-sm transition-colors mt-2">
                 Cadastrar
@@ -290,10 +311,10 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
             <p className="text-xs text-gray-500 mt-1">Gestão de equipe e pagamentos</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="bg-[#121212] px-4 py-2 rounded-lg border border-gray-700">
-              <span className="text-xs text-gray-400 block">Equipe</span>
-              <span className="text-lg font-bold text-white">
-                {employees.length} colaborador{employees.length !== 1 ? 'es' : ''}
+            <div className="bg-[#121212] px-4 py-2 rounded-lg border border-amber-900/40">
+              <span className="text-xs text-gray-400 block">A pagar (mês)</span>
+              <span className="text-lg font-bold text-amber-400">
+                {formatCurrency(totalAmountToPay)}
               </span>
             </div>
             <button
@@ -309,7 +330,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
 
         <div className="space-y-3">
             {employees.length === 0 && <p className="text-gray-500 text-sm italic">Nenhum funcionário cadastrado.</p>}
-            {employees.map(emp => (
+            {employeePayrollRows.map(({ employee: emp, payroll }) => (
               <div key={emp.id} className="flex flex-col md:flex-row justify-between items-center bg-[#121212] p-4 rounded-lg border border-gray-800 hover:border-gray-600 transition-colors">
                 <div className="flex items-center gap-3 w-full md:w-auto mb-3 md:mb-0">
                   <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center text-gray-400 font-bold">
@@ -323,14 +344,25 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+                  <div className="text-right">
+                    <span className="block text-xs text-gray-400">A pagar</span>
+                    <span className="block font-bold text-amber-400 text-sm">
+                      {formatCurrency(payroll.amountToPay)}
+                    </span>
+                    {payroll.linkedExpenses > 0 && (
+                      <span className="block text-[10px] text-gray-600 mt-0.5">
+                        −{formatCurrency(payroll.linkedExpenses)} vinculadas
+                      </span>
+                    )}
+                  </div>
                   <div className="flex gap-2">
                     {onViewEmployee && (
                         <button onClick={() => onViewEmployee(emp)} title="Ver Detalhes" className="p-2 bg-gray-800 text-gray-400 rounded hover:bg-gray-700 hover:text-white border border-gray-700 transition-colors">
                             <Eye size={16} />
                         </button>
                     )}
-                    <button onClick={() => handlePayEmployee(emp)} title="Lançar Pagamento" className="p-2 bg-green-900/20 text-green-500 rounded hover:bg-green-900/40 border border-green-900/50 transition-colors">
+                    <button onClick={() => handlePayEmployee(emp)} title="Lançar pagamento (valor A pagar)" className="p-2 bg-green-900/20 text-green-500 rounded hover:bg-green-900/40 border border-green-900/50 transition-colors">
                       <DollarSign size={16} />
                     </button>
                     <button onClick={() => onDeleteEmployee(emp.id)} className="p-2 bg-red-900/20 text-red-500 rounded hover:bg-red-900/40 border border-red-900/50 transition-colors">
