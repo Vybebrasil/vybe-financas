@@ -35,6 +35,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
   const [endDate, setEndDate] = useState('');
   const [searchText, setSearchText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedType, setSelectedType] = useState<'all' | TransactionType>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedBankAccount, setSelectedBankAccount] = useState<string>('all');
 
@@ -78,15 +79,28 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
         }
       }
 
-      // 3. Category
+      // 3. Entrada / Saída
+      if (selectedType !== 'all' && t.type !== selectedType) return false;
+
+      // 4. Category
       if (selectedCategory !== 'all' && t.category !== selectedCategory) return false;
 
-      // 4. Status
+      // 5. Status
       if (selectedStatus !== 'all' && t.status !== selectedStatus) return false;
 
       return true;
     });
-  }, [transactions, startDate, endDate, searchText, selectedCategory, selectedStatus, selectedBankAccount, clients]);
+  }, [
+    transactions,
+    startDate,
+    endDate,
+    searchText,
+    selectedType,
+    selectedCategory,
+    selectedStatus,
+    selectedBankAccount,
+    clients,
+  ]);
 
   // --- SORT LOGIC ---
   const sortedTransactions = useMemo(() => {
@@ -508,7 +522,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
          <div className="flex items-center gap-2 mb-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
             <Filter size={12} /> Filtros Avançados
          </div>
-         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-4">
             {/* Date Range */}
             <div>
                <label className="text-[10px] text-gray-500 block mb-1">De</label>
@@ -551,6 +565,23 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
                     </button>
                   )}
                </div>
+            </div>
+
+            {/* Entrada / Saída */}
+            <div>
+               <label className="text-[10px] text-gray-500 block mb-1">Tipo</label>
+               <select
+                 value={selectedType}
+                 onChange={(e) =>
+                   setSelectedType(e.target.value as 'all' | TransactionType)
+                 }
+                 className="w-full bg-[#121212] border border-gray-700 rounded p-2 text-xs text-white focus:border-vybe-accent outline-none cursor-pointer"
+                 aria-label="Filtrar por entrada ou saída"
+               >
+                  <option value="all">Entradas e saídas</option>
+                  <option value={TransactionType.INCOME}>Entradas</option>
+                  <option value={TransactionType.EXPENSE}>Saídas</option>
+               </select>
             </div>
 
             {/* Category */}
