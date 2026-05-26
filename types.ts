@@ -152,6 +152,18 @@ export interface AuditLogEntry {
   createdAt: string;
 }
 
+/** Integração WhatsApp via n8n → Evolution API */
+export interface WhatsAppIntegrationSettings {
+  /** Quando true, o app envia pela Edge Function (n8n) em vez de abrir wa.me */
+  enabled: boolean;
+  /** URL do webhook n8n (opcional se N8N_WHATSAPP_WEBHOOK_URL estiver no Supabase) */
+  n8nWebhookUrl?: string;
+}
+
+export interface CompanyIntegrations {
+  whatsapp?: WhatsAppIntegrationSettings;
+}
+
 export interface CompanySettings {
   name: string;
   cnpj: string;
@@ -162,4 +174,5 @@ export interface CompanySettings {
   plans?: string[];
   messageTemplates?: MessageTemplate[];
   categories?: CategoryConfig[];
+  integrations?: CompanyIntegrations;
 }

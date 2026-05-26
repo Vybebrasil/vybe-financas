@@ -41,12 +41,21 @@ export function renderMessageTemplate(body: string, context: TemplateContext): s
     .replace(/\{\{companyName\}\}/g, context.companyName);
 }
 
+/** Dígitos com DDI 55 para Evolution / wa.me */
+export function normalizeWhatsAppPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 10) return '';
+  if (digits.startsWith('55')) return digits;
+  return `55${digits}`;
+}
+
 export function generateWhatsAppLink(
   client: Client,
   message: string,
 ): string {
-  const phone = client.phone.replace(/\D/g, '');
-  return `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`;
+  const phone = normalizeWhatsAppPhone(client.phone);
+  if (!phone) return '';
+  return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }
 
 export function generateMailtoLink(

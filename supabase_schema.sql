@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS company_settings (
   service_plans JSONB DEFAULT '[]'::jsonb,
   message_templates JSONB DEFAULT '[]'::jsonb,
   transaction_categories JSONB DEFAULT '[]'::jsonb,
+  integrations JSONB NOT NULL DEFAULT '{}'::jsonb,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 

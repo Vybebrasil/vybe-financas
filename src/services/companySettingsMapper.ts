@@ -1,4 +1,10 @@
-import { CategoryConfig, CompanySettings, MessageTemplate } from '../../types';
+import {
+  CategoryConfig,
+  CompanyIntegrations,
+  CompanySettings,
+  MessageTemplate,
+  WhatsAppIntegrationSettings,
+} from '../../types';
 import { DEFAULT_CATEGORIES } from './categories';
 import { DEFAULT_MESSAGE_TEMPLATES, DEFAULT_SERVICE_PLANS } from '../../constants';
 
@@ -13,6 +19,50 @@ export interface CompanySettingsRow {
   service_plans: unknown;
   message_templates: unknown;
   transaction_categories?: unknown;
+  integrations?: unknown;
+}
+
+interface IntegrationsDb {
+  whatsapp?: {
+    enabled?: boolean;
+    n8n_webhook_url?: string;
+  };
+}
+
+export function mapIntegrationsFromDB(raw: unknown): CompanyIntegrations | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const db = raw as IntegrationsDb;
+  const whatsapp = db.whatsapp;
+  if (!whatsapp) return undefined;
+  return {
+    whatsapp: {
+      enabled: Boolean(whatsapp.enabled),
+      n8nWebhookUrl: whatsapp.n8n_webhook_url?.trim() || undefined,
+    },
+  };
+}
+
+export function mapIntegrationsToDB(
+  integrations: CompanyIntegrations | undefined,
+): IntegrationsDb {
+  const w = integrations?.whatsapp;
+  if (!w) return {};
+  return {
+    whatsapp: {
+      enabled: w.enabled,
+      n8n_webhook_url: w.n8nWebhookUrl?.trim() || undefined,
+    },
+  };
+}
+
+export function isWhatsAppIntegrationActive(
+  integrations?: CompanyIntegrations,
+): boolean {
+  return Boolean(integrations?.whatsapp?.enabled);
+}
+
+export function defaultWhatsAppIntegration(): WhatsAppIntegrationSettings {
+  return { enabled: false, n8nWebhookUrl: '' };
 }
 
 export const defaultCompanySettings = (): CompanySettings => ({
@@ -24,6 +74,7 @@ export const defaultCompanySettings = (): CompanySettings => ({
   plans: [...DEFAULT_SERVICE_PLANS],
   messageTemplates: [...DEFAULT_MESSAGE_TEMPLATES],
   categories: [...DEFAULT_CATEGORIES],
+  integrations: { whatsapp: defaultWhatsAppIntegration() },
 });
 
 export const mapCompanySettingsFromDB = (row: CompanySettingsRow): CompanySettings => ({
@@ -38,6 +89,7 @@ export const mapCompanySettingsFromDB = (row: CompanySettingsRow): CompanySettin
     ? (row.message_templates as MessageTemplate[])
     : [...DEFAULT_MESSAGE_TEMPLATES],
   categories: normalizeCategoriesFromStorage(row.transaction_categories),
+  integrations: mapIntegrationsFromDB(row.integrations),
 });
 
 export const mapCompanySettingsToDB = (userId: string, settings: CompanySettings) => ({
@@ -51,6 +103,7 @@ export const mapCompanySettingsToDB = (userId: string, settings: CompanySettings
   service_plans: settings.plans ?? [],
   message_templates: settings.messageTemplates ?? [],
   transaction_categories: categoriesForStorage(settings.categories),
+  integrations: mapIntegrationsToDB(settings.integrations),
 });
 
 export const mapCompanySettingsFromMetadata = (

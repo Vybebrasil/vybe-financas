@@ -6,6 +6,7 @@ import { categoriesForStorage } from '../src/services/companySettingsMapper';
 import { Save, Image as ImageIcon, Upload, LogOut, Plus, Trash2, Layers } from 'lucide-react';
 import { api } from '../src/services/api';
 import MessageTemplatesSection from './MessageTemplatesSection';
+import WhatsAppIntegrationSection from './WhatsAppIntegrationSection';
 import { useToast } from './ToastProvider';
 
 interface CompanySettingsFormProps {
@@ -247,10 +248,16 @@ const CompanySettingsForm: React.FC<CompanySettingsFormProps> = ({
       )}
 
       {showMessageTemplates && (
-        <MessageTemplatesSection
-          templates={formData.messageTemplates ?? []}
-          onChange={(messageTemplates) => setFormData({ ...formData, messageTemplates })}
-        />
+        <>
+          <WhatsAppIntegrationSection
+            integrations={formData.integrations}
+            onChange={(integrations) => setFormData({ ...formData, integrations })}
+          />
+          <MessageTemplatesSection
+            templates={formData.messageTemplates ?? []}
+            onChange={(messageTemplates) => setFormData({ ...formData, messageTemplates })}
+          />
+        </>
       )}
 
       <div className="pt-6 border-t border-gray-800 flex justify-between items-center mt-4">

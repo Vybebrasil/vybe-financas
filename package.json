@@ -16,7 +16,9 @@
     "recurring:run": "node scripts/run-monthly-recurring.mjs",
     "recurring:deploy": "npx supabase@latest functions deploy monthly-recurring --project-ref nmqpfvfusyqenexckkvr",
     "recurring:invoke": "node scripts/invoke-monthly-recurring.mjs",
-    "recurring:secret": "powershell -ExecutionPolicy Bypass -File scripts/set-cron-secret.ps1"
+    "recurring:secret": "powershell -ExecutionPolicy Bypass -File scripts/set-cron-secret.ps1",
+    "whatsapp:deploy": "npx supabase@latest functions deploy send-whatsapp --project-ref nmqpfvfusyqenexckkvr",
+    "whatsapp:secrets": "powershell -ExecutionPolicy Bypass -File scripts/set-whatsapp-secrets.ps1"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.91.0",

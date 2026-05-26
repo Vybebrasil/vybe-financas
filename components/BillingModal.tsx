@@ -7,9 +7,13 @@ import {
   generateWhatsAppLink,
   generateMailtoLink,
   BILLING_STAGE_LABELS,
+  normalizeWhatsAppPhone,
 } from '../messageTemplates';
-import { X, MessageCircle, CheckCircle, Smartphone, Mail } from 'lucide-react';
+import { X, MessageCircle, CheckCircle, Smartphone, Mail, Loader2, ExternalLink } from 'lucide-react';
 import { useToast } from './ToastProvider';
+import { isWhatsAppIntegrationActive } from '../src/services/companySettingsMapper';
+import { sendWhatsAppBillingMessage } from '../src/services/whatsappMessaging';
+import type { CompanyIntegrations } from '../types';
 
 interface BillingModalProps {
   isOpen: boolean;
@@ -17,6 +21,7 @@ interface BillingModalProps {
   client: Client | null;
   companyName: string;
   messageTemplates: MessageTemplate[];
+  integrations?: CompanyIntegrations;
   onConfirmToFinance: (client: Client) => void;
 }
 
@@ -26,10 +31,14 @@ const BillingModal: React.FC<BillingModalProps> = ({
   client,
   companyName,
   messageTemplates,
+  integrations,
   onConfirmToFinance,
 }) => {
   const toast = useToast();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+
+  const whatsappAutoSend = isWhatsAppIntegrationActive(integrations);
 
   const whatsappTemplates = useMemo(
     () => messageTemplates.filter((t) => t.channel === 'whatsapp'),
@@ -62,13 +71,50 @@ const BillingModal: React.FC<BillingModalProps> = ({
       ? renderMessageTemplate(selectedTemplate.subject, context)
       : '';
 
-  const handleSendWhatsApp = () => {
+  const openWhatsAppWeb = (message: string) => {
+    const link = generateWhatsAppLink(client, message);
+    if (!link) {
+      toast.error('Telefone do cliente inválido para WhatsApp.');
+      return;
+    }
+    window.open(link, '_blank');
+  };
+
+  const handleSendWhatsApp = async () => {
     if (!selectedTemplate || selectedTemplate.channel !== 'whatsapp') {
       toast.info('Selecione um template de WhatsApp.');
       return;
     }
+
+    if (!normalizeWhatsAppPhone(client.phone)) {
+      toast.error('Cadastre um WhatsApp válido para este cliente.');
+      return;
+    }
+
     const message = renderMessageTemplate(selectedTemplate.body, context);
-    window.open(generateWhatsAppLink(client, message), '_blank');
+
+    if (!whatsappAutoSend) {
+      openWhatsAppWeb(message);
+      return;
+    }
+
+    setIsSendingWhatsApp(true);
+    try {
+      await sendWhatsAppBillingMessage({
+        clientId: client.id,
+        message,
+        companyName,
+        stage: selectedTemplate.stage,
+        templateId: selectedTemplate.id,
+        templateName: selectedTemplate.name,
+      });
+      toast.success('Mensagem enviada pelo WhatsApp.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Falha no envio: ${msg}`);
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
   };
 
   const handleSendEmail = () => {
@@ -89,6 +135,12 @@ const BillingModal: React.FC<BillingModalProps> = ({
     const body = renderMessageTemplate(emailTemplate.body, context);
     window.open(generateMailtoLink(client, subject, body), '_blank');
   };
+
+  const whatsappButtonLabel = whatsappAutoSend
+    ? isSendingWhatsApp
+      ? 'Enviando...'
+      : 'Enviar via WhatsApp'
+    : 'Abrir no WhatsApp';
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -127,6 +179,12 @@ const BillingModal: React.FC<BillingModalProps> = ({
               <span className="text-sm text-white font-medium">Dia {client.dueDay} deste mês</span>
             </div>
           </div>
+
+          {whatsappAutoSend && (
+            <p className="text-xs text-[#25D366] mb-3 bg-[#25D366]/10 border border-[#25D366]/20 rounded-lg px-3 py-2">
+              Envio automático ativo (n8n + Evolution).
+            </p>
+          )}
 
           <div className="mb-4">
             <label className="block text-xs text-vybe-muted mb-1 font-medium">Template da régua</label>
@@ -176,13 +234,32 @@ const BillingModal: React.FC<BillingModalProps> = ({
           <div className="grid grid-cols-1 gap-3">
             <button
               type="button"
-              onClick={handleSendWhatsApp}
-              disabled={!selectedTemplate || selectedTemplate.channel !== 'whatsapp'}
+              onClick={() => void handleSendWhatsApp()}
+              disabled={
+                isSendingWhatsApp ||
+                !selectedTemplate ||
+                selectedTemplate.channel !== 'whatsapp'
+              }
               className="w-full bg-[#25D366] hover:bg-[#1faa53] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg"
             >
-              <MessageCircle size={20} />
-              Enviar no WhatsApp
+              {isSendingWhatsApp ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : (
+                <MessageCircle size={20} />
+              )}
+              {whatsappButtonLabel}
             </button>
+
+            {whatsappAutoSend && selectedTemplate?.channel === 'whatsapp' && previewBody && (
+              <button
+                type="button"
+                onClick={() => openWhatsAppWeb(previewBody)}
+                className="w-full text-sm text-gray-400 hover:text-white py-1 flex items-center justify-center gap-1"
+              >
+                <ExternalLink size={14} />
+                Abrir conversa manualmente (wa.me)
+              </button>
+            )}
 
             <button
               type="button"

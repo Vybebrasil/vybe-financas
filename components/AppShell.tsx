@@ -135,6 +135,7 @@ const AppShell: React.FC = () => {
         client={billingClient}
         companyName={companySettings.name}
         messageTemplates={companySettings.messageTemplates ?? DEFAULT_MESSAGE_TEMPLATES}
+        integrations={companySettings.integrations}
         onClose={() => setIsBillingModalOpen(false)}
         onConfirmToFinance={handleConfirmToFinance}
       />
