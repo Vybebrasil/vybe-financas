@@ -10,8 +10,8 @@ interface ContractsViewProps {
   contracts: Contract[];
   clients: Client[];
   companySettings: CompanySettings;
-  onAddContract: (contract: Contract) => void;
-  onUpdateContract: (contract: Contract) => void;
+  onAddContract: (contract: Contract, pdfFile?: File | null) => Promise<void>;
+  onUpdateContract: (contract: Contract) => Promise<void>;
   onDeleteContract: (id: string) => void;
 }
 
@@ -42,11 +42,11 @@ const ContractsView: React.FC<ContractsViewProps> = ({
     setEditorOpen(true);
   };
 
-  const handleSave = (contract: Contract) => {
+  const handleSave = async (contract: Contract, pdfFile?: File | null) => {
     if (editingContract?.id) {
-      onUpdateContract({ ...contract, id: editingContract.id });
+      await onUpdateContract({ ...contract, id: editingContract.id });
     } else {
-      onAddContract(contract);
+      await onAddContract(contract, pdfFile ?? null);
     }
   };
 
@@ -57,8 +57,9 @@ const ContractsView: React.FC<ContractsViewProps> = ({
         <p>
           Quadro de gestão de contratos com modelo{' '}
           <strong className="text-white">Vybe OS (Marketing Estratégico)</strong>. Preencha os
-          parâmetros, visualize o texto e baixe o{' '}
-          <strong className="text-white">DOCX</strong> com os campos substituídos. O arquivo modelo
+          parâmetros, visualize o texto, baixe o{' '}
+          <strong className="text-white">DOCX</strong> ou envie o{' '}
+          <strong className="text-white">PDF</strong> assinado. O arquivo modelo
           fica em <code className="text-xs text-gray-500">{CONTRACT_TEMPLATE_PATH}</code> — para
           personalizar cláusulas, edite o .docx e mantenha os marcadores{' '}
           <code className="text-vybe-accent">{'{cliente_nome}'}</code>,{' '}

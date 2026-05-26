@@ -86,6 +86,8 @@ export interface Contract {
   notes?: string;
   templateKey?: string;
   parameters?: ContractParameters;
+  pdfUrl?: string;
+  pdfFileName?: string;
   createdAt?: string;
 }
 

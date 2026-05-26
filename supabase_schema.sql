@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS contracts (
   notes TEXT,
   template_key TEXT NOT NULL DEFAULT 'vybe-os-marketing',
   parameters JSONB NOT NULL DEFAULT '{}'::jsonb,
+  pdf_url TEXT,
+  pdf_file_name TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -174,6 +176,10 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('logos', 'logos', true)
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('contracts', 'contracts', true)
+ON CONFLICT (id) DO NOTHING;
+
 -- Políticas: cada usuário só acessa arquivos em storage.objects.name começando com seu user_id/
 DROP POLICY IF EXISTS "receipts_select" ON storage.objects;
 DROP POLICY IF EXISTS "receipts_insert" ON storage.objects;
@@ -200,6 +206,19 @@ CREATE POLICY "logos_update" ON storage.objects FOR UPDATE
   USING (bucket_id = 'logos' AND (storage.foldername(name))[1] = auth.uid()::text);
 CREATE POLICY "logos_delete" ON storage.objects FOR DELETE
   USING (bucket_id = 'logos' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+DROP POLICY IF EXISTS "contracts_select" ON storage.objects;
+DROP POLICY IF EXISTS "contracts_insert" ON storage.objects;
+DROP POLICY IF EXISTS "contracts_update" ON storage.objects;
+DROP POLICY IF EXISTS "contracts_delete" ON storage.objects;
+CREATE POLICY "contracts_select" ON storage.objects FOR SELECT
+  USING (bucket_id = 'contracts' AND (storage.foldername(name))[1] = auth.uid()::text);
+CREATE POLICY "contracts_insert" ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'contracts' AND (storage.foldername(name))[1] = auth.uid()::text);
+CREATE POLICY "contracts_update" ON storage.objects FOR UPDATE
+  USING (bucket_id = 'contracts' AND (storage.foldername(name))[1] = auth.uid()::text);
+CREATE POLICY "contracts_delete" ON storage.objects FOR DELETE
+  USING (bucket_id = 'contracts' AND (storage.foldername(name))[1] = auth.uid()::text);
 
 -- ========== Workspace + equipe + log de ações (ver migration 20260520000005) ==========
 -- Conta compartilhada: migrations em supabase/migrations/ (005–011)

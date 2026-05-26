@@ -106,6 +106,8 @@ const mapContractFromDB = (row: Record<string, unknown>): Contract => ({
   notes: (row.notes as string) || undefined,
   templateKey: (row.template_key as string) || 'vybe-os-marketing',
   parameters: (row.parameters as Contract['parameters']) ?? {},
+  pdfUrl: (row.pdf_url as string) || undefined,
+  pdfFileName: (row.pdf_file_name as string) || undefined,
   createdAt: row.created_at ? String(row.created_at).slice(0, 10) : undefined,
 });
 
@@ -121,6 +123,8 @@ const mapContractToDB = (c: Omit<Contract, 'id'>, userId: string) => ({
   notes: c.notes || null,
   template_key: c.templateKey || 'vybe-os-marketing',
   parameters: c.parameters ?? {},
+  pdf_url: c.pdfUrl || null,
+  pdf_file_name: c.pdfFileName || null,
 });
 
 const mapClientToDB = (c: Omit<Client, 'id'>, userId: string) => ({
@@ -167,14 +171,21 @@ const mapSubscriptionFromDB = (s: Record<string, unknown>): Subscription => ({
   active: Boolean(s.active),
 });
 
-const uploadStorageFile = async (bucket: 'receipts' | 'logos', file: File): Promise<string> => {
+const uploadStorageFile = async (
+  bucket: 'receipts' | 'logos' | 'contracts',
+  file: File,
+  subPath?: string,
+): Promise<string> => {
   const { ownerId } = await requireWorkspace();
   const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
-  const path = `${ownerId}/${Date.now()}.${ext}`;
+  const path = subPath
+    ? `${ownerId}/${subPath}/${Date.now()}.${ext}`
+    : `${ownerId}/${Date.now()}.${ext}`;
 
   const { error } = await supabase.storage.from(bucket).upload(path, file, {
     cacheControl: '3600',
     upsert: false,
+    contentType: file.type || undefined,
   });
   if (error) throw error;
 
@@ -415,6 +426,8 @@ export const api = {
   storage: {
     uploadReceipt: (file: File) => uploadStorageFile('receipts', file),
     uploadLogo: (file: File) => uploadStorageFile('logos', file),
+    uploadContractPdf: (file: File, contractId: string) =>
+      uploadStorageFile('contracts', file, `contracts/${contractId}`),
   },
 
   recurring: {

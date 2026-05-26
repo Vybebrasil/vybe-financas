@@ -109,7 +109,7 @@ export interface AppDataContextValue {
   handleAddClient: (client: Client) => Promise<void>;
   handleUpdateClient: (updatedClient: Client) => Promise<void>;
   handleDeleteClient: (id: string) => void;
-  handleAddContract: (contract: Contract) => Promise<void>;
+  handleAddContract: (contract: Contract, pdfFile?: File | null) => Promise<void>;
   handleUpdateContract: (contract: Contract) => Promise<void>;
   handleDeleteContract: (id: string) => void;
   handleAddEmployee: (emp: Employee) => Promise<void>;
@@ -616,15 +616,28 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     });
   };
 
-  const handleAddContract = async (contract: Contract) => {
+  const handleAddContract = async (contract: Contract, pdfFile?: File | null) => {
     try {
-      const { id: _id, createdAt: _createdAt, ...rest } = contract;
+      const { id: _id, createdAt: _createdAt, pdfUrl: _pdf, pdfFileName: _pdfName, ...rest } =
+        contract;
       const payload = {
         ...rest,
         templateKey: rest.templateKey || 'vybe-os-marketing',
         parameters: rest.parameters ?? {},
       };
-      const newContract = await api.contracts.create(payload);
+      let newContract = await api.contracts.create(payload);
+
+      if (pdfFile) {
+        const pdfUrl = await api.storage.uploadContractPdf(pdfFile, newContract.id);
+        const withPdf = {
+          ...newContract,
+          pdfUrl,
+          pdfFileName: pdfFile.name,
+        };
+        await api.contracts.update(newContract.id, withPdf);
+        newContract = withPdf;
+      }
+
       setContracts((prev) => [newContract, ...prev]);
       const client = clients.find((c) => c.id === newContract.clientId);
       await recordAudit(
@@ -636,7 +649,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       toast.success('Contrato cadastrado.');
     } catch (error) {
       console.error(error);
-      toast.error('Erro ao cadastrar contrato. Execute a migration de contratos no Supabase.');
+      toast.error('Erro ao cadastrar contrato. Verifique migrations e bucket de storage.');
     }
   };
 
@@ -646,7 +659,6 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       setContracts((prev) =>
         prev.map((c) => (c.id === updatedContract.id ? updatedContract : c)),
       );
-      setEditingContract(null);
       await recordAudit(
         'contract.update',
         `Contrato editado: ${updatedContract.title}`,

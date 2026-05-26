@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Client, Contract, ContractStatus } from '../types';
 import { formatCurrency } from '../utils';
-import { FileText, Pencil, Plus, Trash2 } from 'lucide-react';
+import { FileText, Pencil, Plus, Trash2, FileType } from 'lucide-react';
 
 const COLUMNS: { status: ContractStatus; label: string; accent: string }[] = [
   { status: 'Pendente', label: 'Rascunho / Pendente', accent: 'border-amber-900/50' },
@@ -92,6 +92,18 @@ const ContractsBoard: React.FC<ContractsBoardProps> = ({
                       </span>
                     </p>
                     <div className="flex gap-1 opacity-80 group-hover:opacity-100">
+                      {contract.pdfUrl && (
+                        <a
+                          href={contract.pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={contract.pdfFileName ?? 'Abrir PDF'}
+                          className="p-1.5 rounded bg-indigo-900/30 text-indigo-300 hover:bg-indigo-900/50"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <FileType size={12} />
+                        </a>
+                      )}
                       <button
                         type="button"
                         onClick={() => onEdit(contract)}

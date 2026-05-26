@@ -7,6 +7,7 @@ import {
   ContractStatus,
 } from '../types';
 import { formatCurrency } from '../utils';
+import { api } from '../src/services/api';
 import { generateContractDocx } from '../src/services/contractDocx';
 import { buildContractHtmlPreview } from '../src/services/contractPreview';
 import {
@@ -23,9 +24,15 @@ import {
   Loader2,
   Save,
   Settings2,
+  Upload,
+  FileUp,
+  ExternalLink,
+  Trash2,
   X,
 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
+
+const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
 interface ContractEditorModalProps {
   isOpen: boolean;
@@ -33,7 +40,7 @@ interface ContractEditorModalProps {
   contract: Contract | null;
   clients: Client[];
   companySettings: CompanySettings;
-  onSave: (contract: Contract) => void;
+  onSave: (contract: Contract, pdfFile?: File | null) => void | Promise<void>;
 }
 
 const STATUS_OPTIONS: ContractStatus[] = ['Pendente', 'Ativo', 'Encerrado', 'Cancelado'];
@@ -60,12 +67,17 @@ const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
   const [draft, setDraft] = useState(emptyContract());
   const [tab, setTab] = useState<'params' | 'preview'>('params');
   const [downloading, setDownloading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [removePdf, setRemovePdf] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setTab('params');
     setError(null);
+    setPdfFile(null);
+    setRemovePdf(false);
     if (contract) {
       setDraft({
         ...contract,
@@ -136,26 +148,72 @@ const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
     });
   };
 
-  const handleSave = () => {
+  const handlePdfPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const isPdf =
+      file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      setError('Envie apenas arquivos PDF.');
+      return;
+    }
+    if (file.size > MAX_PDF_BYTES) {
+      setError('O PDF deve ter no máximo 10 MB.');
+      return;
+    }
+    setPdfFile(file);
+    setRemovePdf(false);
+    setError(null);
+  };
+
+  const handleSave = async () => {
     if (!draft.clientId || !draft.title) {
       setError('Selecione o cliente e informe o título do contrato.');
       return;
     }
-    onSave({
-      id: contract?.id ?? '',
-      clientId: draft.clientId,
-      title: draft.title.trim(),
-      amount: Number(draft.amount) || 0,
-      status: draft.status,
-      startDate: draft.startDate,
-      endDate: draft.endDate || undefined,
-      dueDay: Number(draft.dueDay) || 1,
-      notes: draft.notes,
-      templateKey: draft.templateKey || VYBE_CONTRACT_TEMPLATE_KEY,
-      parameters: mergeContractParameters(draft.parameters),
-      createdAt: contract?.createdAt,
-    });
-    onClose();
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      let pdfUrl = removePdf ? undefined : draft.pdfUrl;
+      let pdfFileName = removePdf ? undefined : draft.pdfFileName;
+      let pendingPdf: File | null = null;
+
+      if (pdfFile) {
+        if (contract?.id) {
+          pdfUrl = await api.storage.uploadContractPdf(pdfFile, contract.id);
+          pdfFileName = pdfFile.name;
+        } else {
+          pendingPdf = pdfFile;
+        }
+      }
+
+      const payload: Contract = {
+        id: contract?.id ?? '',
+        clientId: draft.clientId,
+        title: draft.title.trim(),
+        amount: Number(draft.amount) || 0,
+        status: draft.status,
+        startDate: draft.startDate,
+        endDate: draft.endDate || undefined,
+        dueDay: Number(draft.dueDay) || 1,
+        notes: draft.notes,
+        templateKey: draft.templateKey || VYBE_CONTRACT_TEMPLATE_KEY,
+        parameters: mergeContractParameters(draft.parameters),
+        pdfUrl,
+        pdfFileName,
+        createdAt: contract?.createdAt,
+      };
+
+      await onSave(payload, pendingPdf);
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao salvar contrato.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDownload = async () => {
@@ -419,6 +477,64 @@ const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
                     className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none"
                   />
                 </div>
+                <h4 className="text-sm font-bold text-white border-b border-gray-800 pb-2 pt-2 flex items-center gap-2">
+                  <Upload size={14} className="text-vybe-accent" />
+                  Contrato em PDF
+                </h4>
+                <p className="text-xs text-gray-500">
+                  Envie o contrato assinado ou documento final em PDF (máx. 10 MB).
+                </p>
+                {(pdfFile || (draft.pdfUrl && !removePdf)) && (
+                  <div className="flex items-center justify-between gap-2 bg-[#121212] border border-gray-700 rounded-lg p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm text-white truncate">
+                        {pdfFile?.name ?? draft.pdfFileName ?? 'contrato.pdf'}
+                      </p>
+                      {pdfFile && (
+                        <p className="text-[10px] text-gray-500">
+                          {(pdfFile.size / 1024).toFixed(0)} KB — será enviado ao salvar
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      {draft.pdfUrl && !removePdf && !pdfFile && (
+                        <a
+                          href={draft.pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 text-indigo-400 hover:text-indigo-300"
+                          title="Abrir PDF"
+                        >
+                          <ExternalLink size={16} />
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPdfFile(null);
+                          setRemovePdf(true);
+                        }}
+                        className="p-2 text-red-400 hover:text-red-300"
+                        title="Remover PDF"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-700 hover:border-vybe-accent/50 rounded-lg p-4 cursor-pointer transition-colors">
+                  <FileUp className="text-gray-500" size={24} />
+                  <span className="text-xs text-gray-400 text-center">
+                    Clique para selecionar ou arrastar um PDF
+                  </span>
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    className="hidden"
+                    onChange={handlePdfPick}
+                  />
+                </label>
+
                 <h4 className="text-sm font-bold text-white border-b border-gray-800 pb-2 pt-2">
                   Testemunhas
                 </h4>
@@ -485,9 +601,11 @@ const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
           <button
             type="button"
             onClick={handleSave}
-            className="px-5 py-2 rounded-lg bg-vybe-accent hover:bg-[#E65C00] text-white font-bold flex items-center gap-2 text-sm"
+            disabled={saving}
+            className="px-5 py-2 rounded-lg bg-vybe-accent hover:bg-[#E65C00] disabled:opacity-50 text-white font-bold flex items-center gap-2 text-sm"
           >
-            <Save size={16} /> Salvar
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            Salvar
           </button>
         </div>
       </div>
