@@ -179,9 +179,19 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                                   <span className="text-gray-500">Despesas vinculadas (mês)</span>
                                   <span className="text-gray-300">− {formatCurrency(payroll.linkedExpenses)}</span>
                                 </div>
+                                {payroll.salaryPaid > 0 && (
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-gray-500">Salário pago (mês)</span>
+                                    <span className="text-gray-300">− {formatCurrency(payroll.salaryPaid)}</span>
+                                  </div>
+                                )}
                                 <div className="flex justify-between text-sm font-bold border-t border-gray-700 pt-2">
-                                  <span className="text-amber-400/90">A pagar</span>
-                                  <span className="text-amber-400">{formatCurrency(payroll.amountToPay)}</span>
+                                  <span className={payroll.amountToPay <= 0 ? 'text-green-400/90' : 'text-amber-400/90'}>
+                                    A pagar
+                                  </span>
+                                  <span className={payroll.amountToPay <= 0 ? 'text-green-400' : 'text-amber-400'}>
+                                    {formatCurrency(payroll.amountToPay)}
+                                  </span>
                                 </div>
                               </div>
                             )}

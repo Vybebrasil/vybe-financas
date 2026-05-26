@@ -311,9 +311,17 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
             <p className="text-xs text-gray-500 mt-1">Gestão de equipe e pagamentos</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="bg-[#121212] px-4 py-2 rounded-lg border border-amber-900/40">
+            <div
+              className={`bg-[#121212] px-4 py-2 rounded-lg border ${
+                totalAmountToPay <= 0 ? 'border-green-900/40' : 'border-amber-900/40'
+              }`}
+            >
               <span className="text-xs text-gray-400 block">A pagar (mês)</span>
-              <span className="text-lg font-bold text-amber-400">
+              <span
+                className={`text-lg font-bold ${
+                  totalAmountToPay <= 0 ? 'text-green-400' : 'text-amber-400'
+                }`}
+              >
                 {formatCurrency(totalAmountToPay)}
               </span>
             </div>
@@ -347,12 +355,21 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                 <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
                   <div className="text-right">
                     <span className="block text-xs text-gray-400">A pagar</span>
-                    <span className="block font-bold text-amber-400 text-sm">
+                    <span
+                      className={`block font-bold text-sm ${
+                        payroll.amountToPay <= 0 ? 'text-green-400' : 'text-amber-400'
+                      }`}
+                    >
                       {formatCurrency(payroll.amountToPay)}
                     </span>
                     {payroll.linkedExpenses > 0 && (
                       <span className="block text-[10px] text-gray-600 mt-0.5">
                         −{formatCurrency(payroll.linkedExpenses)} vinculadas
+                      </span>
+                    )}
+                    {payroll.salaryPaid > 0 && (
+                      <span className="block text-[10px] text-gray-600 mt-0.5">
+                        −{formatCurrency(payroll.salaryPaid)} pago no mês
                       </span>
                     )}
                   </div>
@@ -362,7 +379,17 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                             <Eye size={16} />
                         </button>
                     )}
-                    <button onClick={() => handlePayEmployee(emp)} title="Lançar pagamento (valor A pagar)" className="p-2 bg-green-900/20 text-green-500 rounded hover:bg-green-900/40 border border-green-900/50 transition-colors">
+                    <button
+                      type="button"
+                      onClick={() => handlePayEmployee(emp)}
+                      disabled={payroll.amountToPay <= 0}
+                      title={
+                        payroll.amountToPay <= 0
+                          ? 'Salário do mês já quitado'
+                          : 'Lançar pagamento (valor A pagar)'
+                      }
+                      className="p-2 bg-green-900/20 text-green-500 rounded hover:bg-green-900/40 border border-green-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
                       <DollarSign size={16} />
                     </button>
                     <button onClick={() => onDeleteEmployee(emp.id)} className="p-2 bg-red-900/20 text-red-500 rounded hover:bg-red-900/40 border border-red-900/50 transition-colors">

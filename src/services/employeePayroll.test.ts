@@ -17,7 +17,7 @@ const employee: Employee = {
 };
 
 describe('employeePayroll', () => {
-  it('calcula A pagar = salário + bônus − despesas vinculadas por employeeId', () => {
+  it('calcula A pagar = salário + bônus − despesas vinculadas − salário já pago', () => {
     const month = '2026-05';
     const result = computeEmployeeAmountToPay(
       employee,
@@ -48,7 +48,52 @@ describe('employeePayroll', () => {
       month,
     );
     expect(result.linkedExpenses).toBe(200);
-    expect(result.amountToPay).toBe(3300);
+    expect(result.salaryPaid).toBe(3000);
+    expect(result.amountToPay).toBe(300);
+  });
+
+  it('retorna zero quando salário do mês já foi pago integralmente', () => {
+    const result = computeEmployeeAmountToPay(
+      { ...employee, salary: 1000, bonus: 0 },
+      [
+        {
+          id: '1',
+          description: salaryDescriptionForEmployee('Ana Silva'),
+          amount: 1000,
+          type: TransactionType.EXPENSE,
+          category: Category.SALARY,
+          date: '2026-05-05',
+          status: TransactionStatus.PAID,
+          paymentMethod: 'PIX',
+          employeeId: 'e1',
+        },
+      ],
+      '2026-05',
+    );
+    expect(result.amountToPay).toBe(0);
+    expect(result.salaryPaid).toBe(1000);
+  });
+
+  it('não desconta salário pendente, apenas pago', () => {
+    const result = computeEmployeeAmountToPay(
+      { ...employee, salary: 1000, bonus: 0 },
+      [
+        {
+          id: '1',
+          description: salaryDescriptionForEmployee('Ana Silva'),
+          amount: 1000,
+          type: TransactionType.EXPENSE,
+          category: Category.SALARY,
+          date: '2026-05-05',
+          status: TransactionStatus.PENDING,
+          paymentMethod: 'PIX',
+          employeeId: 'e1',
+        },
+      ],
+      '2026-05',
+    );
+    expect(result.salaryPaid).toBe(0);
+    expect(result.amountToPay).toBe(1000);
   });
 
   it('ignora despesas sem employeeId mesmo com nome na descrição', () => {
