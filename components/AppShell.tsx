@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Loader2,
   Settings,
+  FileSignature,
 } from 'lucide-react';
 import { useAppData } from '../src/context/AppDataContext';
 import { DEFAULT_SERVICE_PLANS, DEFAULT_MESSAGE_TEMPLATES } from '../constants';
@@ -27,6 +28,7 @@ import ConfirmDialog from './ConfirmDialog';
 import DelinquencyPanel from './DelinquencyPanel';
 
 const ExpensesView = lazy(() => import('./ExpensesView'));
+const ContractsView = lazy(() => import('./ContractsView'));
 const ReportsView = lazy(() => import('./ReportsView'));
 const SettingsView = lazy(() => import('./SettingsView'));
 
@@ -46,7 +48,13 @@ const AppShell: React.FC = () => {
     setTabBeforeSettings,
     transactions,
     clients,
+    contracts,
     employees,
+    editingContract,
+    setEditingContract,
+    handleAddContract,
+    handleUpdateContract,
+    handleDeleteContract,
     subscriptions,
     companySettings,
     preFilledTransaction,
@@ -228,6 +236,7 @@ const AppShell: React.FC = () => {
                   { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
                   { id: 'finance' as const, label: 'Financeiro', icon: Wallet },
                   { id: 'clients' as const, label: 'Clientes', icon: Users },
+                  { id: 'contracts' as const, label: 'Contratos', icon: FileSignature },
                   { id: 'expenses' as const, label: 'Despesas', icon: CreditCard },
                   { id: 'reports' as const, label: 'Relatórios', icon: PieChart },
                 ] as const
@@ -302,6 +311,21 @@ const AppShell: React.FC = () => {
               onViewHistory={handleOpenHistory}
             />
           </div>
+        )}
+
+        {activeTab === 'contracts' && (
+          <Suspense fallback={<TabLoader />}>
+            <ContractsView
+              contracts={contracts}
+              clients={clients}
+              onAddContract={handleAddContract}
+              onUpdateContract={handleUpdateContract}
+              onDeleteContract={handleDeleteContract}
+              editingContract={editingContract}
+              onCancelEdit={() => setEditingContract(null)}
+              onEditContract={setEditingContract}
+            />
+          </Suspense>
         )}
 
         {activeTab === 'expenses' && (

@@ -52,6 +52,21 @@ CREATE TABLE IF NOT EXISTS clients (
 -- Se a tabela já existir:
 -- ALTER TABLE clients ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
+-- Contratos (vinculados a clientes)
+CREATE TABLE IF NOT EXISTS contracts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  amount NUMERIC NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'Ativo',
+  start_date DATE NOT NULL,
+  end_date DATE,
+  due_day INTEGER NOT NULL DEFAULT 1,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Employees
 CREATE TABLE IF NOT EXISTS employees (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -118,6 +133,7 @@ CREATE POLICY "recurring_log_own" ON recurring_generation_log
 -- RLS
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE contracts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bank_accounts ENABLE ROW LEVEL SECURITY;
@@ -129,6 +145,10 @@ CREATE POLICY "transactions_own" ON transactions
 
 DROP POLICY IF EXISTS "clients_own" ON clients;
 CREATE POLICY "clients_own" ON clients
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "contracts_own" ON contracts;
+CREATE POLICY "contracts_own" ON contracts
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "employees_own" ON employees;

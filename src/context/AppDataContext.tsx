@@ -9,6 +9,7 @@ import React, {
 import {
   Transaction,
   Client,
+  Contract,
   Employee,
   Subscription,
   CompanySettings,
@@ -37,7 +38,14 @@ import { DEFAULT_CATEGORIES } from '../services/categories';
 import { useToast } from '../../components/ToastProvider';
 import { getErrorMessage, isMissingTableError } from '../utils/errorMessage';
 
-export type AppTab = 'dashboard' | 'finance' | 'clients' | 'expenses' | 'reports' | 'settings';
+export type AppTab =
+  | 'dashboard'
+  | 'finance'
+  | 'clients'
+  | 'contracts'
+  | 'expenses'
+  | 'reports'
+  | 'settings';
 
 export type PreFilledTransaction = {
   description: string;
@@ -63,6 +71,7 @@ export interface AppDataContextValue {
   setTabBeforeSettings: (tab: Exclude<AppTab, 'settings'>) => void;
   transactions: Transaction[];
   clients: Client[];
+  contracts: Contract[];
   employees: Employee[];
   subscriptions: Subscription[];
   companySettings: CompanySettings;
@@ -74,6 +83,7 @@ export interface AppDataContextValue {
   preFilledTransaction: PreFilledTransaction | null;
   editingTransaction: Transaction | null;
   editingClient: Client | null;
+  editingContract: Contract | null;
   isCompanySettingsOpen: boolean;
   setIsCompanySettingsOpen: (open: boolean) => void;
   isBillingModalOpen: boolean;
@@ -100,6 +110,9 @@ export interface AppDataContextValue {
   handleAddClient: (client: Client) => Promise<void>;
   handleUpdateClient: (updatedClient: Client) => Promise<void>;
   handleDeleteClient: (id: string) => void;
+  handleAddContract: (contract: Contract) => Promise<void>;
+  handleUpdateContract: (contract: Contract) => Promise<void>;
+  handleDeleteContract: (id: string) => void;
   handleAddEmployee: (emp: Employee) => Promise<void>;
   handleDeleteEmployee: (id: string) => void;
   handleUpdateEmployee: (updatedEmployee: Employee) => Promise<void>;
@@ -129,6 +142,7 @@ export interface AppDataContextValue {
   handleGenerateReceipt: (transaction: Transaction) => void;
   setEditingTransaction: (t: Transaction | null) => void;
   setEditingClient: (c: Client | null) => void;
+  setEditingContract: (c: Contract | null) => void;
   setIsBillingModalOpen: (open: boolean) => void;
   setIsHistoryModalOpen: (open: boolean) => void;
   setIsEmployeeModalOpen: (open: boolean) => void;
@@ -159,6 +173,8 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   const [preFilledTransaction, setPreFilledTransaction] = useState<PreFilledTransaction | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
@@ -258,6 +274,14 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
 
       const clientData = await api.clients.list();
       setClients(clientData);
+
+      try {
+        const contractData = await api.contracts.list();
+        setContracts(contractData);
+      } catch (contractErr) {
+        console.warn('Contratos indisponíveis:', contractErr);
+        setContracts([]);
+      }
 
       const empData = await api.employees.list();
       setEmployees(empData);
@@ -579,7 +603,9 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
         const removed = clients.find((c) => c.id === id);
         await api.clients.delete(id);
         setClients((prev) => prev.filter((c) => c.id !== id));
+        setContracts((prev) => prev.filter((c) => c.clientId !== id));
         if (editingClient?.id === id) setEditingClient(null);
+        if (editingContract?.clientId === id) setEditingContract(null);
         await recordAudit(
           'client.delete',
           `Cliente excluído: ${removed?.name ?? id}`,
@@ -590,6 +616,66 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       } catch (error) {
         console.error(error);
         toast.error('Erro ao excluir cliente.');
+      }
+    });
+  };
+
+  const handleAddContract = async (contract: Contract) => {
+    try {
+      const { id: _id, createdAt: _createdAt, ...rest } = contract;
+      const newContract = await api.contracts.create(rest);
+      setContracts((prev) => [newContract, ...prev]);
+      const client = clients.find((c) => c.id === newContract.clientId);
+      await recordAudit(
+        'contract.create',
+        `Contrato: ${newContract.title}${client ? ` (${client.name})` : ''}`,
+        'contract',
+        newContract.id,
+      );
+      toast.success('Contrato cadastrado.');
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao cadastrar contrato. Execute a migration de contratos no Supabase.');
+    }
+  };
+
+  const handleUpdateContract = async (updatedContract: Contract) => {
+    try {
+      await api.contracts.update(updatedContract.id, updatedContract);
+      setContracts((prev) =>
+        prev.map((c) => (c.id === updatedContract.id ? updatedContract : c)),
+      );
+      setEditingContract(null);
+      await recordAudit(
+        'contract.update',
+        `Contrato editado: ${updatedContract.title}`,
+        'contract',
+        updatedContract.id,
+      );
+      toast.success('Contrato atualizado.');
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao atualizar contrato.');
+    }
+  };
+
+  const handleDeleteContract = (id: string) => {
+    askConfirm('Excluir contrato', 'Tem certeza que deseja excluir este contrato?', async () => {
+      try {
+        const removed = contracts.find((c) => c.id === id);
+        await api.contracts.delete(id);
+        setContracts((prev) => prev.filter((c) => c.id !== id));
+        if (editingContract?.id === id) setEditingContract(null);
+        await recordAudit(
+          'contract.delete',
+          `Contrato excluído: ${removed?.title ?? id}`,
+          'contract',
+          id,
+        );
+        toast.success('Contrato excluído.');
+      } catch (error) {
+        console.error(error);
+        toast.error('Erro ao excluir contrato.');
       }
     });
   };
@@ -820,6 +906,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     setTabBeforeSettings,
     transactions,
     clients,
+    contracts,
     employees,
     subscriptions,
     companySettings,
@@ -831,6 +918,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     preFilledTransaction,
     editingTransaction,
     editingClient,
+    editingContract,
     isCompanySettingsOpen,
     setIsCompanySettingsOpen,
     isBillingModalOpen,
@@ -857,6 +945,9 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     handleAddClient,
     handleUpdateClient,
     handleDeleteClient,
+    handleAddContract,
+    handleUpdateContract,
+    handleDeleteContract,
     handleAddEmployee,
     handleDeleteEmployee,
     handleUpdateEmployee,
@@ -883,6 +974,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     handleGenerateReceipt,
     setEditingTransaction,
     setEditingClient,
+    setEditingContract,
     setIsBillingModalOpen,
     setIsHistoryModalOpen,
     setIsEmployeeModalOpen,

@@ -54,6 +54,21 @@ export interface DashboardSummary {
   projectedBalance: number;
 }
 
+export type ContractStatus = 'Ativo' | 'Pendente' | 'Encerrado' | 'Cancelado';
+
+export interface Contract {
+  id: string;
+  clientId: string;
+  title: string;
+  amount: number;
+  status: ContractStatus;
+  startDate: string;
+  endDate?: string;
+  dueDay: number;
+  notes?: string;
+  createdAt?: string;
+}
+
 export interface Client {
   id: string;
   name: string; // Nome da Empresa

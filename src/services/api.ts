@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import {
   Transaction,
   Client,
+  Contract,
   Employee,
   Subscription,
   TransactionType,
@@ -91,6 +92,31 @@ const mapClientFromDB = (c: Record<string, unknown>): Client => ({
   dueDay: Number(c.due_day) || 1,
   contractStatus: (c.contract_status as Client['contractStatus']) || 'Pendente',
   createdAt: c.created_at ? String(c.created_at).slice(0, 10) : undefined,
+});
+
+const mapContractFromDB = (row: Record<string, unknown>): Contract => ({
+  id: row.id as string,
+  clientId: row.client_id as string,
+  title: row.title as string,
+  amount: Number(row.amount) || 0,
+  status: (row.status as Contract['status']) || 'Pendente',
+  startDate: String(row.start_date).slice(0, 10),
+  endDate: row.end_date ? String(row.end_date).slice(0, 10) : undefined,
+  dueDay: Number(row.due_day) || 1,
+  notes: (row.notes as string) || undefined,
+  createdAt: row.created_at ? String(row.created_at).slice(0, 10) : undefined,
+});
+
+const mapContractToDB = (c: Omit<Contract, 'id'>, userId: string) => ({
+  user_id: userId,
+  client_id: c.clientId,
+  title: c.title,
+  amount: c.amount,
+  status: c.status,
+  start_date: c.startDate,
+  end_date: c.endDate || null,
+  due_day: c.dueDay,
+  notes: c.notes || null,
 });
 
 const mapClientToDB = (c: Omit<Client, 'id'>, userId: string) => ({
@@ -427,6 +453,54 @@ export const api = {
       }
 
       await api.user.updateMetadata({ last_recurring_month: monthKey });
+    },
+  },
+
+  contracts: {
+    async list() {
+      const { ownerId } = await requireWorkspace();
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('user_id', ownerId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return (data ?? []).map(mapContractFromDB);
+    },
+
+    async create(contract: Omit<Contract, 'id'>) {
+      const { ownerId } = await requireWorkspace();
+      const { data, error } = await supabase
+        .from('contracts')
+        .insert([mapContractToDB(contract, ownerId)])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return mapContractFromDB(data);
+    },
+
+    async update(id: string, contract: Contract) {
+      const { ownerId } = await requireWorkspace();
+      const { error } = await supabase
+        .from('contracts')
+        .update(mapContractToDB(contract, ownerId))
+        .eq('id', id)
+        .eq('user_id', ownerId);
+
+      if (error) throw error;
+    },
+
+    async delete(id: string) {
+      const { ownerId } = await requireWorkspace();
+      const { error } = await supabase
+        .from('contracts')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', ownerId);
+
+      if (error) throw error;
     },
   },
 
