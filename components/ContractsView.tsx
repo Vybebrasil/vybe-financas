@@ -1,39 +1,71 @@
-import React, { useMemo } from 'react';
-import { Client, Contract } from '../types';
+import React, { useMemo, useState } from 'react';
+import { Client, CompanySettings, Contract } from '../types';
 import { formatCurrency } from '../utils';
-import ContractForm from './ContractForm';
-import ContractList from './ContractList';
-import { FileSignature, TrendingUp } from 'lucide-react';
+import ContractsBoard from './ContractsBoard';
+import ContractEditorModal from './ContractEditorModal';
+import { CONTRACT_TEMPLATE_PATH } from '../src/services/contractTemplates';
+import { FileSignature, TrendingUp, Info } from 'lucide-react';
 
 interface ContractsViewProps {
   contracts: Contract[];
   clients: Client[];
+  companySettings: CompanySettings;
   onAddContract: (contract: Contract) => void;
   onUpdateContract: (contract: Contract) => void;
   onDeleteContract: (id: string) => void;
-  editingContract: Contract | null;
-  onCancelEdit: () => void;
-  onEditContract: (contract: Contract) => void;
 }
 
 const ContractsView: React.FC<ContractsViewProps> = ({
   contracts,
   clients,
+  companySettings,
   onAddContract,
   onUpdateContract,
   onDeleteContract,
-  editingContract,
-  onCancelEdit,
-  onEditContract,
 }) => {
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingContract, setEditingContract] = useState<Contract | null>(null);
+
   const stats = useMemo(() => {
     const active = contracts.filter((c) => c.status === 'Ativo');
     const mrr = active.reduce((sum, c) => sum + c.amount, 0);
     return { total: contracts.length, activeCount: active.length, mrr };
   }, [contracts]);
 
+  const openNew = () => {
+    setEditingContract(null);
+    setEditorOpen(true);
+  };
+
+  const openEdit = (contract: Contract) => {
+    setEditingContract(contract);
+    setEditorOpen(true);
+  };
+
+  const handleSave = (contract: Contract) => {
+    if (editingContract?.id) {
+      onUpdateContract({ ...contract, id: editingContract.id });
+    } else {
+      onAddContract(contract);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-bar-grow origin-top">
+      <div className="bg-vybe-card border border-gray-800 rounded-xl p-4 flex gap-3 text-sm text-gray-400">
+        <Info className="text-vybe-accent shrink-0" size={20} />
+        <p>
+          Quadro de gestão de contratos com modelo{' '}
+          <strong className="text-white">Vybe OS (Marketing Estratégico)</strong>. Preencha os
+          parâmetros, visualize o texto e baixe o{' '}
+          <strong className="text-white">DOCX</strong> com os campos substituídos. O arquivo modelo
+          fica em <code className="text-xs text-gray-500">{CONTRACT_TEMPLATE_PATH}</code> — para
+          personalizar cláusulas, edite o .docx e mantenha os marcadores{' '}
+          <code className="text-vybe-accent">{'{cliente_nome}'}</code>,{' '}
+          <code className="text-vybe-accent">{'{valor_mensal}'}</code>, etc.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-vybe-card border border-gray-800 rounded-xl p-4">
           <span className="text-xs text-gray-500 block mb-1">Total de contratos</span>
@@ -55,19 +87,24 @@ const ContractsView: React.FC<ContractsViewProps> = ({
         </div>
       </div>
 
-      <ContractForm
-        clients={clients}
-        onAddContract={onAddContract}
-        onUpdateContract={onUpdateContract}
-        editingContract={editingContract}
-        onCancelEdit={onCancelEdit}
-      />
-
-      <ContractList
+      <ContractsBoard
         contracts={contracts}
         clients={clients}
-        onDeleteContract={onDeleteContract}
-        onEditContract={onEditContract}
+        onEdit={openEdit}
+        onDelete={onDeleteContract}
+        onNew={openNew}
+      />
+
+      <ContractEditorModal
+        isOpen={editorOpen}
+        onClose={() => {
+          setEditorOpen(false);
+          setEditingContract(null);
+        }}
+        contract={editingContract}
+        clients={clients}
+        companySettings={companySettings}
+        onSave={handleSave}
       />
     </div>
   );

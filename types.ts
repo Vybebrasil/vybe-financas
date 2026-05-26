@@ -56,6 +56,24 @@ export interface DashboardSummary {
 
 export type ContractStatus = 'Ativo' | 'Pendente' | 'Encerrado' | 'Cancelado';
 
+/** Campos substituíveis no modelo DOCX Vybe OS. */
+export interface ContractParameters {
+  clienteLogradouro?: string;
+  clienteNumero?: string;
+  clienteBairro?: string;
+  clienteCidade?: string;
+  clienteUf?: string;
+  clienteCep?: string;
+  clienteRepresentante?: string;
+  clienteCpf?: string;
+  prazoMeses?: number;
+  cidadeForo?: string;
+  testemunha1Nome?: string;
+  testemunha1Cpf?: string;
+  testemunha2Nome?: string;
+  testemunha2Cpf?: string;
+}
+
 export interface Contract {
   id: string;
   clientId: string;
@@ -66,6 +84,8 @@ export interface Contract {
   endDate?: string;
   dueDay: number;
   notes?: string;
+  templateKey?: string;
+  parameters?: ContractParameters;
   createdAt?: string;
 }
 

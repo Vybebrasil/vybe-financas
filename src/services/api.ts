@@ -104,6 +104,8 @@ const mapContractFromDB = (row: Record<string, unknown>): Contract => ({
   endDate: row.end_date ? String(row.end_date).slice(0, 10) : undefined,
   dueDay: Number(row.due_day) || 1,
   notes: (row.notes as string) || undefined,
+  templateKey: (row.template_key as string) || 'vybe-os-marketing',
+  parameters: (row.parameters as Contract['parameters']) ?? {},
   createdAt: row.created_at ? String(row.created_at).slice(0, 10) : undefined,
 });
 
@@ -117,6 +119,8 @@ const mapContractToDB = (c: Omit<Contract, 'id'>, userId: string) => ({
   end_date: c.endDate || null,
   due_day: c.dueDay,
   notes: c.notes || null,
+  template_key: c.templateKey || 'vybe-os-marketing',
+  parameters: c.parameters ?? {},
 });
 
 const mapClientToDB = (c: Omit<Client, 'id'>, userId: string) => ({

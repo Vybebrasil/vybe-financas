@@ -83,7 +83,6 @@ export interface AppDataContextValue {
   preFilledTransaction: PreFilledTransaction | null;
   editingTransaction: Transaction | null;
   editingClient: Client | null;
-  editingContract: Contract | null;
   isCompanySettingsOpen: boolean;
   setIsCompanySettingsOpen: (open: boolean) => void;
   isBillingModalOpen: boolean;
@@ -142,7 +141,6 @@ export interface AppDataContextValue {
   handleGenerateReceipt: (transaction: Transaction) => void;
   setEditingTransaction: (t: Transaction | null) => void;
   setEditingClient: (c: Client | null) => void;
-  setEditingContract: (c: Contract | null) => void;
   setIsBillingModalOpen: (open: boolean) => void;
   setIsHistoryModalOpen: (open: boolean) => void;
   setIsEmployeeModalOpen: (open: boolean) => void;
@@ -174,7 +172,6 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   const [clients, setClients] = useState<Client[]>([]);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [contracts, setContracts] = useState<Contract[]>([]);
-  const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
@@ -605,7 +602,6 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
         setClients((prev) => prev.filter((c) => c.id !== id));
         setContracts((prev) => prev.filter((c) => c.clientId !== id));
         if (editingClient?.id === id) setEditingClient(null);
-        if (editingContract?.clientId === id) setEditingContract(null);
         await recordAudit(
           'client.delete',
           `Cliente excluído: ${removed?.name ?? id}`,
@@ -623,7 +619,12 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   const handleAddContract = async (contract: Contract) => {
     try {
       const { id: _id, createdAt: _createdAt, ...rest } = contract;
-      const newContract = await api.contracts.create(rest);
+      const payload = {
+        ...rest,
+        templateKey: rest.templateKey || 'vybe-os-marketing',
+        parameters: rest.parameters ?? {},
+      };
+      const newContract = await api.contracts.create(payload);
       setContracts((prev) => [newContract, ...prev]);
       const client = clients.find((c) => c.id === newContract.clientId);
       await recordAudit(
@@ -665,7 +666,6 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
         const removed = contracts.find((c) => c.id === id);
         await api.contracts.delete(id);
         setContracts((prev) => prev.filter((c) => c.id !== id));
-        if (editingContract?.id === id) setEditingContract(null);
         await recordAudit(
           'contract.delete',
           `Contrato excluído: ${removed?.title ?? id}`,
@@ -918,7 +918,6 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     preFilledTransaction,
     editingTransaction,
     editingClient,
-    editingContract,
     isCompanySettingsOpen,
     setIsCompanySettingsOpen,
     isBillingModalOpen,
@@ -974,7 +973,6 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     handleGenerateReceipt,
     setEditingTransaction,
     setEditingClient,
-    setEditingContract,
     setIsBillingModalOpen,
     setIsHistoryModalOpen,
     setIsEmployeeModalOpen,

@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS contracts (
   end_date DATE,
   due_day INTEGER NOT NULL DEFAULT 1,
   notes TEXT,
+  template_key TEXT NOT NULL DEFAULT 'vybe-os-marketing',
+  parameters JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -50,8 +50,6 @@ const AppShell: React.FC = () => {
     clients,
     contracts,
     employees,
-    editingContract,
-    setEditingContract,
     handleAddContract,
     handleUpdateContract,
     handleDeleteContract,
@@ -318,12 +316,10 @@ const AppShell: React.FC = () => {
             <ContractsView
               contracts={contracts}
               clients={clients}
+              companySettings={companySettings}
               onAddContract={handleAddContract}
               onUpdateContract={handleUpdateContract}
               onDeleteContract={handleDeleteContract}
-              editingContract={editingContract}
-              onCancelEdit={() => setEditingContract(null)}
-              onEditContract={setEditingContract}
             />
           </Suspense>
         )}
