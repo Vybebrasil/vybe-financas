@@ -11,7 +11,7 @@ import { DashboardSummary } from '../../types';
 import { computeDashboardSummary } from './summary';
 import { getDelinquencyReport } from './delinquency';
 import { isClientPaymentCategory } from './categories';
-import { getCurrentMonthKey } from './recurringLogic';
+import { getCurrentMonthKey, salaryDescriptionForEmployee } from './recurringLogic';
 
 export type DashboardPeriodPreset = 'this_month' | 'last_month' | 'this_year';
 
@@ -262,4 +262,108 @@ export function getPendingToReconcile(transactions: Transaction[], limit = 5): T
 
 export function getDelinquencySnapshot(clients: Client[], transactions: Transaction[]) {
   return getDelinquencyReport(clients, transactions, getCurrentMonthKey());
+}
+
+export type PayrollEntryStatus = 'paid' | 'pending' | 'missing';
+
+export interface PayrollEmployeeStatus {
+  employee: Employee;
+  status: PayrollEntryStatus;
+  amount: number;
+  transactionId?: string;
+  paymentDate?: string;
+  scheduledDate?: string;
+}
+
+export interface PayrollMonthSummary {
+  periodLabel: string;
+  entries: PayrollEmployeeStatus[];
+  paidCount: number;
+  pendingCount: number;
+  missingCount: number;
+  totalPaid: number;
+  totalPending: number;
+  totalExpected: number;
+}
+
+function isSalaryTransactionForEmployee(
+  transaction: Transaction,
+  employee: Employee,
+): boolean {
+  if (transaction.type !== TransactionType.EXPENSE) return false;
+  const expected = salaryDescriptionForEmployee(employee.name);
+  if (transaction.description === expected) return true;
+  if (transaction.category !== Category.SALARY) return false;
+  const name = employee.name.trim().toLowerCase();
+  return name.length > 0 && transaction.description.toLowerCase().includes(name);
+}
+
+export function computePayrollMonthStatus(
+  employees: Employee[],
+  transactions: Transaction[],
+  range: DateRange,
+): PayrollMonthSummary {
+  const inRange = filterTransactionsByRange(
+    transactions,
+    range.startDate,
+    range.endDate,
+  );
+
+  const entries: PayrollEmployeeStatus[] = employees.map((employee) => {
+    const salaryTxs = inRange
+      .filter((t) => isSalaryTransactionForEmployee(t, employee))
+      .sort((a, b) => b.date.localeCompare(a.date));
+
+    const paidTx = salaryTxs.find((t) => t.status === TransactionStatus.PAID);
+    if (paidTx) {
+      return {
+        employee,
+        status: 'paid' as const,
+        amount: paidTx.amount,
+        transactionId: paidTx.id,
+        paymentDate: paidTx.date.split('T')[0],
+      };
+    }
+
+    const pendingTx = salaryTxs.find((t) => t.status === TransactionStatus.PENDING);
+    if (pendingTx) {
+      return {
+        employee,
+        status: 'pending' as const,
+        amount: pendingTx.amount,
+        transactionId: pendingTx.id,
+        scheduledDate: pendingTx.date.split('T')[0],
+      };
+    }
+
+    return {
+      employee,
+      status: 'missing' as const,
+      amount: employee.salary,
+    };
+  });
+
+  const paid = entries.filter((e) => e.status === 'paid');
+  const pending = entries.filter((e) => e.status === 'pending');
+  const missing = entries.filter((e) => e.status === 'missing');
+
+  return {
+    periodLabel: range.label,
+    entries: entries.sort((a, b) => {
+      const order: Record<PayrollEntryStatus, number> = {
+        pending: 0,
+        missing: 1,
+        paid: 2,
+      };
+      const diff = order[a.status] - order[b.status];
+      if (diff !== 0) return diff;
+      return a.employee.name.localeCompare(b.employee.name, 'pt-BR');
+    }),
+    paidCount: paid.length,
+    pendingCount: pending.length,
+    missingCount: missing.length,
+    totalPaid: paid.reduce((s, e) => s + e.amount, 0),
+    totalPending: pending.reduce((s, e) => s + e.amount, 0),
+    totalExpected: employees.reduce((s, e) => s + e.salary, 0),
+  };
 }

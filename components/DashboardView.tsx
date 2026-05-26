@@ -32,7 +32,9 @@ import {
   getDelinquencySnapshot,
   getPendingToReconcile,
   getPeriodRange,
+  computePayrollMonthStatus,
 } from '../src/services/dashboardMetrics';
+import PayrollStatusSection from './PayrollStatusSection';
 const PERIOD_OPTIONS: { id: DashboardPeriodPreset; label: string }[] = [
   { id: 'this_month', label: 'Este mês' },
   { id: 'last_month', label: 'Mês anterior' },
@@ -86,6 +88,11 @@ const DashboardView: React.FC = () => {
   const delinquency = useMemo(
     () => getDelinquencySnapshot(clients, transactions),
     [clients, transactions],
+  );
+
+  const payrollStatus = useMemo(
+    () => computePayrollMonthStatus(employees, transactions, range),
+    [employees, transactions, range],
   );
 
   const topDelinquent = useMemo(() => {
@@ -193,6 +200,18 @@ const DashboardView: React.FC = () => {
           }
         />
       </section>
+
+      <PayrollStatusSection
+        summary={payrollStatus}
+        onOpenExpenses={() => setActiveTab('expenses')}
+        onEditTransaction={(transactionId) => {
+          const tx = transactions.find((t) => t.id === transactionId);
+          if (tx) {
+            setActiveTab('finance');
+            handleEditTransaction(tx);
+          }
+        }}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

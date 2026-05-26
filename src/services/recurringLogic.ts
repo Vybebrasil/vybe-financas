@@ -8,6 +8,9 @@ import {
   Category,
 } from '../../types';
 
+export const salaryDescriptionForEmployee = (name: string): string =>
+  `Salário - ${name}`;
+
 export const getCurrentMonthKey = (date = new Date()): string => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -70,7 +73,7 @@ export function buildMonthlyRecurringPayloads(
   }
 
   for (const emp of employees) {
-    const description = `Salário - ${emp.name}`;
+    const description = salaryDescriptionForEmployee(emp.name);
     if (alreadyScheduled(transactions, description, monthKey)) continue;
     toCreate.push({
       description,
