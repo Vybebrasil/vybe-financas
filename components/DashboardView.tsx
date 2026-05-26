@@ -102,14 +102,6 @@ const DashboardView: React.FC = () => {
     [subscriptions, transactions, range],
   );
 
-  const openExpenseTransaction = (transactionId: string) => {
-    const tx = transactions.find((t) => t.id === transactionId);
-    if (tx) {
-      setActiveTab('finance');
-      handleEditTransaction(tx);
-    }
-  };
-
   const topDelinquent = useMemo(() => {
     const items = [...delinquency.overdue, ...delinquency.pending].slice(0, 3);
     return items;
@@ -220,12 +212,10 @@ const DashboardView: React.FC = () => {
         <PayrollStatusSection
           summary={payrollStatus}
           onOpenExpenses={() => setActiveTab('expenses')}
-          onEditTransaction={openExpenseTransaction}
         />
         <SubscriptionsStatusSection
           summary={subscriptionsStatus}
           onOpenExpenses={() => setActiveTab('expenses')}
-          onEditTransaction={openExpenseTransaction}
         />
       </div>
 
