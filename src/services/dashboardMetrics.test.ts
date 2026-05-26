@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { TransactionStatus, TransactionType, Category, Employee } from '../../types';
+import {
+  TransactionStatus,
+  TransactionType,
+  Category,
+  Employee,
+  Subscription,
+} from '../../types';
 import {
   computePeriodKpis,
   filterTransactionsByRange,
   getPeriodRange,
   computePeriodComparison,
   computePayrollMonthStatus,
+  computeSubscriptionsMonthStatus,
 } from './dashboardMetrics';
-import { salaryDescriptionForEmployee } from './recurringLogic';
+import { salaryDescriptionForEmployee, subscriptionDescriptionFor } from './recurringLogic';
 
 describe('dashboardMetrics', () => {
   it('filtra transações por intervalo', () => {
@@ -154,5 +161,67 @@ describe('dashboardMetrics', () => {
     expect(summary.totalPending).toBe(5000);
     expect(summary.entries.find((e) => e.employee.name === 'Ana')?.status).toBe('paid');
     expect(summary.entries.find((e) => e.employee.name === 'Bruno')?.status).toBe('pending');
+  });
+
+  it('classifica assinaturas de apps pagas e pendentes no mês', () => {
+    const subs: Subscription[] = [
+      {
+        id: 's1',
+        name: 'Figma',
+        cost: 120,
+        renewalDay: 5,
+        paymentMethod: 'CARTAO',
+        active: true,
+      },
+      {
+        id: 's2',
+        name: 'Notion',
+        cost: 80,
+        renewalDay: 12,
+        paymentMethod: 'PIX',
+        active: true,
+      },
+      {
+        id: 's3',
+        name: 'App inativo',
+        cost: 50,
+        renewalDay: 1,
+        paymentMethod: 'PIX',
+        active: false,
+      },
+    ];
+    const range = getPeriodRange('this_month', new Date('2026-05-15'));
+    const summary = computeSubscriptionsMonthStatus(
+      subs,
+      [
+        {
+          id: 't1',
+          description: subscriptionDescriptionFor('Figma'),
+          amount: 120,
+          type: TransactionType.EXPENSE,
+          category: Category.TOOLS,
+          date: '2026-05-05',
+          status: TransactionStatus.PAID,
+          paymentMethod: 'CARTAO',
+        },
+        {
+          id: 't2',
+          description: subscriptionDescriptionFor('Notion'),
+          amount: 80,
+          type: TransactionType.EXPENSE,
+          category: Category.TOOLS,
+          date: '2026-05-12',
+          status: TransactionStatus.PENDING,
+          paymentMethod: 'PIX',
+        },
+      ],
+      range,
+    );
+
+    expect(summary.entries).toHaveLength(2);
+    expect(summary.paidCount).toBe(1);
+    expect(summary.pendingCount).toBe(1);
+    expect(summary.entries.find((e) => e.subscription.name === 'Figma')?.status).toBe('paid');
+    expect(summary.entries.find((e) => e.subscription.name === 'Notion')?.status).toBe('pending');
   });
 });

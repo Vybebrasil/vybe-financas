@@ -11,7 +11,11 @@ import { DashboardSummary } from '../../types';
 import { computeDashboardSummary } from './summary';
 import { getDelinquencyReport } from './delinquency';
 import { isClientPaymentCategory } from './categories';
-import { getCurrentMonthKey, salaryDescriptionForEmployee } from './recurringLogic';
+import {
+  getCurrentMonthKey,
+  salaryDescriptionForEmployee,
+  subscriptionDescriptionFor,
+} from './recurringLogic';
 
 export type DashboardPeriodPreset = 'this_month' | 'last_month' | 'this_year';
 
@@ -264,7 +268,10 @@ export function getDelinquencySnapshot(clients: Client[], transactions: Transact
   return getDelinquencyReport(clients, transactions, getCurrentMonthKey());
 }
 
-export type PayrollEntryStatus = 'paid' | 'pending' | 'missing';
+export type RecurringExpenseStatus = 'paid' | 'pending' | 'missing';
+
+/** @deprecated Use RecurringExpenseStatus */
+export type PayrollEntryStatus = RecurringExpenseStatus;
 
 export interface PayrollEmployeeStatus {
   employee: Employee;
@@ -309,15 +316,85 @@ export function computePayrollMonthStatus(
     range.endDate,
   );
 
-  const entries: PayrollEmployeeStatus[] = employees.map((employee) => {
-    const salaryTxs = inRange
-      .filter((t) => isSalaryTransactionForEmployee(t, employee))
+  const raw = buildRecurringExpenseEntries({
+    items: employees,
+    inRange,
+    getAmount: (e) => e.salary,
+    matchTransaction: isSalaryTransactionForEmployee,
+  });
+
+  const entries: PayrollEmployeeStatus[] = raw.map((r) => ({
+    employee: r.item,
+    status: r.status,
+    amount: r.amount,
+    transactionId: r.transactionId,
+    paymentDate: r.paymentDate,
+    scheduledDate: r.scheduledDate,
+  }));
+
+  return summarizeRecurringEntries(
+    entries,
+    range.label,
+    employees.reduce((s, e) => s + e.salary, 0),
+    (a, b) => a.employee.name.localeCompare(b.employee.name, 'pt-BR'),
+  ) as PayrollMonthSummary;
+}
+
+export interface SubscriptionAppStatus {
+  subscription: Subscription;
+  status: RecurringExpenseStatus;
+  amount: number;
+  transactionId?: string;
+  paymentDate?: string;
+  scheduledDate?: string;
+}
+
+export interface SubscriptionsMonthSummary {
+  periodLabel: string;
+  entries: SubscriptionAppStatus[];
+  paidCount: number;
+  pendingCount: number;
+  missingCount: number;
+  totalPaid: number;
+  totalPending: number;
+  totalExpected: number;
+}
+
+function isSubscriptionTransaction(
+  transaction: Transaction,
+  subscription: Subscription,
+): boolean {
+  if (transaction.type !== TransactionType.EXPENSE) return false;
+  const expected = subscriptionDescriptionFor(subscription.name);
+  if (transaction.description === expected) return true;
+  const name = subscription.name.trim().toLowerCase();
+  if (!name) return false;
+  const desc = transaction.description.toLowerCase();
+  return desc.includes(name) && desc.includes('assinatura');
+}
+
+function buildRecurringExpenseEntries<T>(params: {
+  items: T[];
+  inRange: Transaction[];
+  getAmount: (item: T) => number;
+  matchTransaction: (tx: Transaction, item: T) => boolean;
+}): Array<{
+  item: T;
+  status: RecurringExpenseStatus;
+  amount: number;
+  transactionId?: string;
+  paymentDate?: string;
+  scheduledDate?: string;
+}> {
+  return params.items.map((item) => {
+    const txs = params.inRange
+      .filter((t) => params.matchTransaction(t, item))
       .sort((a, b) => b.date.localeCompare(a.date));
 
-    const paidTx = salaryTxs.find((t) => t.status === TransactionStatus.PAID);
+    const paidTx = txs.find((t) => t.status === TransactionStatus.PAID);
     if (paidTx) {
       return {
-        employee,
+        item,
         status: 'paid' as const,
         amount: paidTx.amount,
         transactionId: paidTx.id,
@@ -325,10 +402,10 @@ export function computePayrollMonthStatus(
       };
     }
 
-    const pendingTx = salaryTxs.find((t) => t.status === TransactionStatus.PENDING);
+    const pendingTx = txs.find((t) => t.status === TransactionStatus.PENDING);
     if (pendingTx) {
       return {
-        employee,
+        item,
         status: 'pending' as const,
         amount: pendingTx.amount,
         transactionId: pendingTx.id,
@@ -337,33 +414,87 @@ export function computePayrollMonthStatus(
     }
 
     return {
-      employee,
+      item,
       status: 'missing' as const,
-      amount: employee.salary,
+      amount: params.getAmount(item),
     };
   });
+}
 
+function summarizeRecurringEntries<T>(
+  entries: Array<{ status: RecurringExpenseStatus; amount: number } & T>,
+  periodLabel: string,
+  totalExpected: number,
+  sortKey: (a: T, b: T) => number,
+): {
+  periodLabel: string;
+  entries: typeof entries;
+  paidCount: number;
+  pendingCount: number;
+  missingCount: number;
+  totalPaid: number;
+  totalPending: number;
+  totalExpected: number;
+} {
   const paid = entries.filter((e) => e.status === 'paid');
   const pending = entries.filter((e) => e.status === 'pending');
   const missing = entries.filter((e) => e.status === 'missing');
+  const order: Record<RecurringExpenseStatus, number> = {
+    pending: 0,
+    missing: 1,
+    paid: 2,
+  };
 
   return {
-    periodLabel: range.label,
-    entries: entries.sort((a, b) => {
-      const order: Record<PayrollEntryStatus, number> = {
-        pending: 0,
-        missing: 1,
-        paid: 2,
-      };
+    periodLabel,
+    entries: [...entries].sort((a, b) => {
       const diff = order[a.status] - order[b.status];
       if (diff !== 0) return diff;
-      return a.employee.name.localeCompare(b.employee.name, 'pt-BR');
+      return sortKey(a, b);
     }),
     paidCount: paid.length,
     pendingCount: pending.length,
     missingCount: missing.length,
     totalPaid: paid.reduce((s, e) => s + e.amount, 0),
     totalPending: pending.reduce((s, e) => s + e.amount, 0),
-    totalExpected: employees.reduce((s, e) => s + e.salary, 0),
+    totalExpected,
   };
+}
+
+export function computeSubscriptionsMonthStatus(
+  subscriptions: Subscription[],
+  transactions: Transaction[],
+  range: DateRange,
+): SubscriptionsMonthSummary {
+  const active = subscriptions.filter((s) => s.active);
+  const inRange = filterTransactionsByRange(
+    transactions,
+    range.startDate,
+    range.endDate,
+  );
+
+  const raw = buildRecurringExpenseEntries({
+    items: active,
+    inRange,
+    getAmount: (s) => s.cost,
+    matchTransaction: isSubscriptionTransaction,
+  });
+
+  const entries: SubscriptionAppStatus[] = raw.map((r) => ({
+    subscription: r.item,
+    status: r.status,
+    amount: r.amount,
+    transactionId: r.transactionId,
+    paymentDate: r.paymentDate,
+    scheduledDate: r.scheduledDate,
+  }));
+
+  const summary = summarizeRecurringEntries(
+    entries,
+    range.label,
+    active.reduce((s, sub) => s + sub.cost, 0),
+    (a, b) => a.subscription.name.localeCompare(b.subscription.name, 'pt-BR'),
+  );
+
+  return summary as SubscriptionsMonthSummary;
 }

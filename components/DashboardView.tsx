@@ -33,8 +33,10 @@ import {
   getPendingToReconcile,
   getPeriodRange,
   computePayrollMonthStatus,
+  computeSubscriptionsMonthStatus,
 } from '../src/services/dashboardMetrics';
 import PayrollStatusSection from './PayrollStatusSection';
+import SubscriptionsStatusSection from './SubscriptionsStatusSection';
 const PERIOD_OPTIONS: { id: DashboardPeriodPreset; label: string }[] = [
   { id: 'this_month', label: 'Este mês' },
   { id: 'last_month', label: 'Mês anterior' },
@@ -94,6 +96,19 @@ const DashboardView: React.FC = () => {
     () => computePayrollMonthStatus(employees, transactions, range),
     [employees, transactions, range],
   );
+
+  const subscriptionsStatus = useMemo(
+    () => computeSubscriptionsMonthStatus(subscriptions, transactions, range),
+    [subscriptions, transactions, range],
+  );
+
+  const openExpenseTransaction = (transactionId: string) => {
+    const tx = transactions.find((t) => t.id === transactionId);
+    if (tx) {
+      setActiveTab('finance');
+      handleEditTransaction(tx);
+    }
+  };
 
   const topDelinquent = useMemo(() => {
     const items = [...delinquency.overdue, ...delinquency.pending].slice(0, 3);
@@ -201,17 +216,18 @@ const DashboardView: React.FC = () => {
         />
       </section>
 
-      <PayrollStatusSection
-        summary={payrollStatus}
-        onOpenExpenses={() => setActiveTab('expenses')}
-        onEditTransaction={(transactionId) => {
-          const tx = transactions.find((t) => t.id === transactionId);
-          if (tx) {
-            setActiveTab('finance');
-            handleEditTransaction(tx);
-          }
-        }}
-      />
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <PayrollStatusSection
+          summary={payrollStatus}
+          onOpenExpenses={() => setActiveTab('expenses')}
+          onEditTransaction={openExpenseTransaction}
+        />
+        <SubscriptionsStatusSection
+          summary={subscriptionsStatus}
+          onOpenExpenses={() => setActiveTab('expenses')}
+          onEditTransaction={openExpenseTransaction}
+        />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

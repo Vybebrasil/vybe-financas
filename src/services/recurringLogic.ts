@@ -11,6 +11,9 @@ import {
 export const salaryDescriptionForEmployee = (name: string): string =>
   `Salário - ${name}`;
 
+export const subscriptionDescriptionFor = (name: string): string =>
+  `Assinatura - ${name}`;
+
 export const getCurrentMonthKey = (date = new Date()): string => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -88,7 +91,7 @@ export function buildMonthlyRecurringPayloads(
 
   for (const sub of subscriptions) {
     if (!sub.active) continue;
-    const description = `Assinatura - ${sub.name}`;
+    const description = subscriptionDescriptionFor(sub.name);
     if (alreadyScheduled(transactions, description, monthKey)) continue;
     toCreate.push({
       description,
