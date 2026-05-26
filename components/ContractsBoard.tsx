@@ -52,11 +52,12 @@ const ContractsBoard: React.FC<ContractsBoardProps> = ({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
+      <div className="overflow-x-auto pb-2 -mx-1 px-1 overscroll-x-contain">
+        <div className="grid grid-flow-col auto-cols-[minmax(260px,1fr)] md:grid-flow-row md:grid-cols-2 xl:grid-cols-4 gap-4 items-start min-w-0 md:min-w-0 w-max md:w-full max-w-full">
         {COLUMNS.map((col) => (
           <div
             key={col.status}
-            className={`bg-[#121212] rounded-xl border ${col.accent} min-h-[200px] flex flex-col`}
+            className={`bg-[#121212] rounded-xl border ${col.accent} min-h-[200px] flex flex-col w-[260px] md:w-auto shrink-0 md:shrink`}
           >
             <div className="p-3 border-b border-gray-800 flex justify-between items-center">
               <h3 className="text-sm font-bold text-white">{col.label}</h3>
@@ -114,6 +115,7 @@ const ContractsBoard: React.FC<ContractsBoardProps> = ({
             </div>
           </div>
         ))}
+        </div>
       </div>
     </div>
   );

@@ -25,6 +25,7 @@ import {
   Settings2,
   X,
 } from 'lucide-react';
+import ModalPortal from './ModalPortal';
 
 interface ContractEditorModalProps {
   isOpen: boolean;
@@ -177,12 +178,9 @@ const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-2 md:p-4">
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-vybe-card border border-gray-700 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden animate-bar-grow origin-center">
+    <ModalPortal isOpen={isOpen} onClose={onClose}>
+      <div className="bg-vybe-card border border-gray-700 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[min(880px,calc(100vh-8rem))] flex flex-col overflow-hidden">
         <div className="bg-[#2A2A2A] p-4 flex justify-between items-center border-b border-gray-700 shrink-0">
           <div>
             <h3 className="text-white font-bold flex items-center gap-2">
@@ -493,7 +491,7 @@ const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 };
 

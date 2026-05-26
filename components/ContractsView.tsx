@@ -51,7 +51,7 @@ const ContractsView: React.FC<ContractsViewProps> = ({
   };
 
   return (
-    <div className="space-y-8 animate-bar-grow origin-top">
+    <div className="space-y-8">
       <div className="bg-vybe-card border border-gray-800 rounded-xl p-4 flex gap-3 text-sm text-gray-400">
         <Info className="text-vybe-accent shrink-0" size={20} />
         <p>
