@@ -43,7 +43,7 @@ const WhatsAppIntegrationSection: React.FC<WhatsAppIntegrationSectionProps> = ({
           onChange={(e) => updateWhatsApp({ enabled: e.target.checked })}
           className="w-4 h-4 rounded border-gray-600 text-vybe-accent focus:ring-vybe-accent"
         />
-        <span className="text-sm text-white">Ativar envio automático pelo servidor</span>
+        <span className="text-sm text-white">Permitir envio na régua de cobrança (n8n)</span>
       </label>
 
       <div>

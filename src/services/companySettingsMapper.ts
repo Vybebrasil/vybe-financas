@@ -62,7 +62,7 @@ export function isWhatsAppIntegrationActive(
 }
 
 export function defaultWhatsAppIntegration(): WhatsAppIntegrationSettings {
-  return { enabled: false, n8nWebhookUrl: '' };
+  return { enabled: true, n8nWebhookUrl: '' };
 }
 
 export const defaultCompanySettings = (): CompanySettings => ({

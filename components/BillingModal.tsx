@@ -4,16 +4,13 @@ import { formatCurrency } from '../utils';
 import {
   buildTemplateContext,
   renderMessageTemplate,
-  generateWhatsAppLink,
   generateMailtoLink,
   BILLING_STAGE_LABELS,
   normalizeWhatsAppPhone,
 } from '../messageTemplates';
-import { X, MessageCircle, CheckCircle, Smartphone, Mail, Loader2, ExternalLink } from 'lucide-react';
+import { X, MessageCircle, CheckCircle, Smartphone, Mail, Loader2 } from 'lucide-react';
 import { useToast } from './ToastProvider';
-import { isWhatsAppIntegrationActive } from '../src/services/companySettingsMapper';
 import { sendWhatsAppBillingMessage } from '../src/services/whatsappMessaging';
-import type { CompanyIntegrations } from '../types';
 
 interface BillingModalProps {
   isOpen: boolean;
@@ -21,7 +18,6 @@ interface BillingModalProps {
   client: Client | null;
   companyName: string;
   messageTemplates: MessageTemplate[];
-  integrations?: CompanyIntegrations;
   onConfirmToFinance: (client: Client) => void;
 }
 
@@ -31,14 +27,11 @@ const BillingModal: React.FC<BillingModalProps> = ({
   client,
   companyName,
   messageTemplates,
-  integrations,
   onConfirmToFinance,
 }) => {
   const toast = useToast();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
-
-  const whatsappAutoSend = isWhatsAppIntegrationActive(integrations);
 
   const whatsappTemplates = useMemo(
     () => messageTemplates.filter((t) => t.channel === 'whatsapp'),
@@ -71,15 +64,6 @@ const BillingModal: React.FC<BillingModalProps> = ({
       ? renderMessageTemplate(selectedTemplate.subject, context)
       : '';
 
-  const openWhatsAppWeb = (message: string) => {
-    const link = generateWhatsAppLink(client, message);
-    if (!link) {
-      toast.error('Telefone do cliente inválido para WhatsApp.');
-      return;
-    }
-    window.open(link, '_blank');
-  };
-
   const handleSendWhatsApp = async () => {
     if (!selectedTemplate || selectedTemplate.channel !== 'whatsapp') {
       toast.info('Selecione um template de WhatsApp.');
@@ -92,11 +76,6 @@ const BillingModal: React.FC<BillingModalProps> = ({
     }
 
     const message = renderMessageTemplate(selectedTemplate.body, context);
-
-    if (!whatsappAutoSend) {
-      openWhatsAppWeb(message);
-      return;
-    }
 
     setIsSendingWhatsApp(true);
     try {
@@ -136,12 +115,6 @@ const BillingModal: React.FC<BillingModalProps> = ({
     window.open(generateMailtoLink(client, subject, body), '_blank');
   };
 
-  const whatsappButtonLabel = whatsappAutoSend
-    ? isSendingWhatsApp
-      ? 'Enviando...'
-      : 'Enviar via WhatsApp'
-    : 'Abrir no WhatsApp';
-
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div
@@ -179,12 +152,6 @@ const BillingModal: React.FC<BillingModalProps> = ({
               <span className="text-sm text-white font-medium">Dia {client.dueDay} deste mês</span>
             </div>
           </div>
-
-          {whatsappAutoSend && (
-            <p className="text-xs text-[#25D366] mb-3 bg-[#25D366]/10 border border-[#25D366]/20 rounded-lg px-3 py-2">
-              Envio automático ativo (n8n + Evolution).
-            </p>
-          )}
 
           <div className="mb-4">
             <label className="block text-xs text-vybe-muted mb-1 font-medium">Template da régua</label>
@@ -247,19 +214,8 @@ const BillingModal: React.FC<BillingModalProps> = ({
               ) : (
                 <MessageCircle size={20} />
               )}
-              {whatsappButtonLabel}
+              {isSendingWhatsApp ? 'Enviando...' : 'Enviar no WhatsApp'}
             </button>
-
-            {whatsappAutoSend && selectedTemplate?.channel === 'whatsapp' && previewBody && (
-              <button
-                type="button"
-                onClick={() => openWhatsAppWeb(previewBody)}
-                className="w-full text-sm text-gray-400 hover:text-white py-1 flex items-center justify-center gap-1"
-              >
-                <ExternalLink size={14} />
-                Abrir conversa manualmente (wa.me)
-              </button>
-            )}
 
             <button
               type="button"

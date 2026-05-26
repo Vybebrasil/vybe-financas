@@ -46,10 +46,8 @@ Se o body incluir **`mensagem`**, o Vybe usa o texto dos templates da régua. Ca
 
 ## 3. No app Vybe
 
-1. **Configurações do Sistema**
-2. Ative **“Enviar automático pelo servidor”**
-3. Salve
-4. Em **Cobrança** → **Enviar via WhatsApp**
+1. **Configurações do Sistema** → mantenha **WhatsApp (n8n + Evolution)** ativo (padrão)
+2. Em **Cobrança** → **Enviar no WhatsApp** (sempre via n8n, sem wa.me)
 
 ## Payload enviado ao n8n
 

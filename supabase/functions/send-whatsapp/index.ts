@@ -143,7 +143,13 @@ Deno.serve(async (req) => {
   const whatsapp = integrations.whatsapp;
 
   if (whatsapp?.enabled === false) {
-    return jsonResponse({ error: 'Integração WhatsApp desativada' }, 403);
+    return jsonResponse(
+      {
+        error:
+          'Envio WhatsApp desativado em Configurações do Sistema. Ative em WhatsApp (n8n + Evolution).',
+      },
+      403,
+    );
   }
 
   const webhookUrl =
