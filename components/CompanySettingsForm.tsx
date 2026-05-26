@@ -7,6 +7,7 @@ import { Save, Image as ImageIcon, Upload, LogOut, Plus, Trash2, Layers } from '
 import { api } from '../src/services/api';
 import MessageTemplatesSection from './MessageTemplatesSection';
 import WhatsAppIntegrationSection from './WhatsAppIntegrationSection';
+import PaymentIntegrationSection from './PaymentIntegrationSection';
 import { useToast } from './ToastProvider';
 
 interface CompanySettingsFormProps {
@@ -250,6 +251,10 @@ const CompanySettingsForm: React.FC<CompanySettingsFormProps> = ({
       {showMessageTemplates && (
         <>
           <WhatsAppIntegrationSection
+            integrations={formData.integrations}
+            onChange={(integrations) => setFormData({ ...formData, integrations })}
+          />
+          <PaymentIntegrationSection
             integrations={formData.integrations}
             onChange={(integrations) => setFormData({ ...formData, integrations })}
           />

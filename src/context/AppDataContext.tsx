@@ -37,6 +37,7 @@ import { computeDashboardSummary } from '../services/summary';
 import { DEFAULT_CATEGORIES } from '../services/categories';
 import { useToast } from '../../components/ToastProvider';
 import { getErrorMessage, isMissingTableError } from '../utils/errorMessage';
+import { withComputedContractDates } from '../services/contractValidity';
 
 export type AppTab =
   | 'dashboard'
@@ -274,7 +275,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
 
       try {
         const contractData = await api.contracts.list();
-        setContracts(contractData);
+        setContracts(contractData.map((c) => withComputedContractDates(c)));
       } catch (contractErr) {
         console.warn('Contratos indisponíveis:', contractErr);
         setContracts([]);
@@ -620,11 +621,12 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     try {
       const { id: _id, createdAt: _createdAt, pdfUrl: _pdf, pdfFileName: _pdfName, ...rest } =
         contract;
-      const payload = {
+      const normalized = withComputedContractDates({
         ...rest,
         templateKey: rest.templateKey || 'vybe-os-marketing',
         parameters: rest.parameters ?? {},
-      };
+      } as Omit<Contract, 'id'>);
+      const payload = normalized;
       let newContract = await api.contracts.create(payload);
 
       if (pdfFile) {
@@ -655,15 +657,16 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
 
   const handleUpdateContract = async (updatedContract: Contract) => {
     try {
-      await api.contracts.update(updatedContract.id, updatedContract);
+      const normalized = withComputedContractDates(updatedContract);
+      await api.contracts.update(normalized.id, normalized);
       setContracts((prev) =>
-        prev.map((c) => (c.id === updatedContract.id ? updatedContract : c)),
+        prev.map((c) => (c.id === normalized.id ? normalized : c)),
       );
       await recordAudit(
         'contract.update',
-        `Contrato editado: ${updatedContract.title}`,
+        `Contrato editado: ${normalized.title}`,
         'contract',
-        updatedContract.id,
+        normalized.id,
       );
       toast.success('Contrato atualizado.');
     } catch (error) {

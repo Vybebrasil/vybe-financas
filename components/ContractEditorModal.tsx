@@ -18,6 +18,10 @@ import {
   VYBE_CONTRACT_TEMPLATE_KEY,
 } from '../src/services/contractTemplates';
 import {
+  computeContractEndDate,
+  formatDateBr,
+} from '../src/services/contractValidity';
+import {
   Download,
   Eye,
   FileText,
@@ -51,6 +55,7 @@ const emptyContract = (): Omit<Contract, 'id'> & { id?: string } => ({
   amount: 0,
   status: 'Pendente',
   startDate: new Date().toISOString().slice(0, 10),
+  signedDate: new Date().toISOString().slice(0, 10),
   dueDay: 20,
   templateKey: VYBE_CONTRACT_TEMPLATE_KEY,
   parameters: { ...DEFAULT_CONTRACT_PARAMETERS },
@@ -103,6 +108,7 @@ const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
       amount: Number(draft.amount) || 0,
       status: draft.status,
       startDate: draft.startDate,
+      signedDate: draft.signedDate,
       endDate: draft.endDate,
       dueDay: Number(draft.dueDay) || 1,
       parameters: draft.parameters,
@@ -119,6 +125,16 @@ const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
   const previewHtml = useMemo(
     () => (templateContext ? buildContractHtmlPreview(templateContext) : ''),
     [templateContext],
+  );
+
+  const vigenciaFim = useMemo(
+    () =>
+      computeContractEndDate({
+        signedDate: draft.signedDate,
+        startDate: draft.startDate,
+        parameters: draft.parameters,
+      }),
+    [draft.signedDate, draft.startDate, draft.parameters],
   );
 
   const updateParams = (patch: Partial<ContractParameters>) => {
@@ -190,6 +206,13 @@ const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
         }
       }
 
+      const endDate =
+        computeContractEndDate({
+          signedDate: draft.signedDate,
+          startDate: draft.startDate,
+          parameters: draft.parameters,
+        }) || draft.endDate;
+
       const payload: Contract = {
         id: contract?.id ?? '',
         clientId: draft.clientId,
@@ -197,7 +220,8 @@ const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
         amount: Number(draft.amount) || 0,
         status: draft.status,
         startDate: draft.startDate,
-        endDate: draft.endDate || undefined,
+        signedDate: draft.signedDate || undefined,
+        endDate: endDate || undefined,
         dueDay: Number(draft.dueDay) || 1,
         notes: draft.notes,
         templateKey: draft.templateKey || VYBE_CONTRACT_TEMPLATE_KEY,
@@ -353,7 +377,18 @@ const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">Início</label>
+                    <label className="text-xs text-gray-500 block mb-1">Data de assinatura</label>
+                    <input
+                      type="date"
+                      value={draft.signedDate ?? ''}
+                      onChange={(e) =>
+                        setDraft({ ...draft, signedDate: e.target.value || undefined })
+                      }
+                      className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Início da vigência</label>
                     <input
                       type="date"
                       value={draft.startDate}
@@ -361,8 +396,10 @@ const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
                       className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none"
                     />
                   </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">Prazo (meses)</label>
+                    <label className="text-xs text-gray-500 block mb-1">Prazo de validade (meses)</label>
                     <input
                       type="number"
                       min="1"
@@ -373,6 +410,15 @@ const ContractEditorModal: React.FC<ContractEditorModalProps> = ({
                       }
                       className="w-full bg-[#121212] border border-gray-700 rounded-lg p-3 text-sm text-white focus:border-vybe-accent outline-none"
                     />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Válido até</label>
+                    <div
+                      className="w-full bg-[#0d0d0d] border border-gray-800 rounded-lg p-3 text-sm text-gray-300"
+                      title="Calculado: assinatura + prazo"
+                    >
+                      {vigenciaFim ? formatDateBr(vigenciaFim) : '—'}
+                    </div>
                   </div>
                 </div>
                 <div>

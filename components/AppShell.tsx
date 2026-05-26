@@ -140,6 +140,7 @@ const AppShell: React.FC = () => {
         isOpen={isBillingModalOpen}
         client={billingClient}
         companyName={companySettings.name}
+        paymentSettings={companySettings.integrations?.payment}
         messageTemplates={companySettings.messageTemplates ?? DEFAULT_MESSAGE_TEMPLATES}
         onClose={() => setIsBillingModalOpen(false)}
         onConfirmToFinance={handleConfirmToFinance}

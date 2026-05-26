@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Client, MessageTemplate } from '../types';
+import { Client, MessageTemplate, PaymentIntegrationSettings } from '../types';
 import { formatCurrency } from '../utils';
 import {
   buildTemplateContext,
@@ -17,6 +17,7 @@ interface BillingModalProps {
   onClose: () => void;
   client: Client | null;
   companyName: string;
+  paymentSettings?: PaymentIntegrationSettings;
   messageTemplates: MessageTemplate[];
   onConfirmToFinance: (client: Client) => void;
 }
@@ -26,6 +27,7 @@ const BillingModal: React.FC<BillingModalProps> = ({
   onClose,
   client,
   companyName,
+  paymentSettings,
   messageTemplates,
   onConfirmToFinance,
 }) => {
@@ -53,7 +55,10 @@ const BillingModal: React.FC<BillingModalProps> = ({
   if (!isOpen || !client) return null;
 
   const selectedTemplate = messageTemplates.find((t) => t.id === selectedTemplateId);
-  const context = buildTemplateContext(client, companyName);
+  const context = buildTemplateContext(client, companyName, {
+    pixKey: paymentSettings?.pixKey,
+    paymentLink: paymentSettings?.paymentLink,
+  });
 
   const previewBody = selectedTemplate
     ? renderMessageTemplate(selectedTemplate.body, context)

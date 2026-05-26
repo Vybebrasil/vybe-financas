@@ -44,6 +44,8 @@ O workflow valida o header **`X-Cobranca-Token`** e envia pela Evolution:
 
 Se o body incluir **`mensagem`**, o Vybe usa o texto dos templates da régua. Caso contrário, o n8n monta a mensagem padrão de cobrança.
 
+Com **`GEMINI_API_KEY`** no container n8n, um agente Gemini refina o texto antes do envio. Mensagens recebidas consultam o Vybe (`whatsapp-context`) e usam cliente, PIX, cobrança e templates — ver [WHATSAPP-VARIAVEIS-VYBE.md](./WHATSAPP-VARIAVEIS-VYBE.md) e `../n8n/docs/WHATSAPP-IA-AGENTE.md`.
+
 ## 3. No app Vybe
 
 1. **Configurações do Sistema** → mantenha **WhatsApp (n8n + Evolution)** ativo (padrão)
@@ -58,7 +60,9 @@ Se o body incluir **`mensagem`**, o Vybe usa o texto dos templates da régua. Ca
   "nome": "Maria Silva",
   "vencimento": "Dia 10",
   "mensagem": "Texto do template Vybe já renderizado",
-  "id_fatura": "uuid-do-cliente"
+  "id_fatura": "uuid-do-cliente",
+  "usar_ia": true,
+  "empresa": "Vybe Brasil"
 }
 ```
 

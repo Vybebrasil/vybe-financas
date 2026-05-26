@@ -71,8 +71,8 @@ export function buildContractTemplateContext(
     cidadeForo: params.cidadeForo || DEFAULT_VYBE_CONTRACTOR.cidadeForo,
   };
 
-  const assinatura = contract.startDate
-    ? new Date(`${contract.startDate}T12:00:00`)
+  const assinatura = contract.signedDate || contract.startDate
+    ? new Date(`${contract.signedDate || contract.startDate}T12:00:00`)
     : new Date();
   const dataAssinatura = assinatura.toLocaleDateString('pt-BR', {
     day: '2-digit',
@@ -97,6 +97,13 @@ export function buildContractTemplateContext(
     dia_pagamento: String(contract.dueDay),
     prazo_meses: prazoMeses,
     data_assinatura: dataAssinatura,
+    data_fim_vigencia: contract.endDate
+      ? new Date(`${contract.endDate}T12:00:00`).toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: 'long',
+          year: 'numeric',
+        })
+      : '',
     cidade_foro: contractor.cidadeForo,
     contrato_titulo: contract.title,
     testemunha1_nome: params.testemunha1Nome || '',

@@ -30,6 +30,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
   const [filterYear, setFilterYear] = useState<string>(String(new Date().getFullYear()));
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterBankAccount, setFilterBankAccount] = useState<string>('all');
+  const [filterType, setFilterType] = useState<'all' | TransactionType>('all');
 
   const categoriesForFilter = useMemo(() => {
     const base = categoryLabels ?? getCategoryLabels();
@@ -71,23 +72,26 @@ const TransactionList: React.FC<TransactionListProps> = ({
       const matchBank =
         filterBankAccount === 'all' ||
         (filterBankAccount === 'none' ? !t.bankAccountId : t.bankAccountId === filterBankAccount);
+      const matchType = filterType === 'all' || t.type === filterType;
 
-      return matchYear && matchMonth && matchCategory && matchBank;
+      return matchYear && matchMonth && matchCategory && matchBank && matchType;
     });
-  }, [transactions, filterYear, filterMonth, filterCategory, filterBankAccount]);
+  }, [transactions, filterYear, filterMonth, filterCategory, filterBankAccount, filterType]);
 
   const clearFilters = () => {
     setFilterMonth('all');
     setFilterYear('all');
     setFilterCategory('all');
     setFilterBankAccount('all');
+    setFilterType('all');
   };
 
   const hasActiveFilters =
     filterMonth !== 'all' ||
     filterYear !== 'all' ||
     filterCategory !== 'all' ||
-    filterBankAccount !== 'all';
+    filterBankAccount !== 'all' ||
+    filterType !== 'all';
 
   const getPaymentIcon = (method?: PaymentMethod) => {
     switch (method) {
@@ -157,6 +161,20 @@ const TransactionList: React.FC<TransactionListProps> = ({
                 {availableYears.map(year => (
                   <option key={year} value={year}>{year}</option>
                 ))}
+              </select>
+
+              {/* Filtro Entrada / Saída */}
+              <select
+                value={filterType}
+                onChange={(e) =>
+                  setFilterType(e.target.value as 'all' | TransactionType)
+                }
+                className="bg-transparent text-xs text-white p-2 outline-none cursor-pointer border-r border-gray-700"
+                aria-label="Filtrar por entrada ou saída"
+              >
+                <option value="all">Entradas e saídas</option>
+                <option value={TransactionType.INCOME}>Entradas</option>
+                <option value={TransactionType.EXPENSE}>Saídas</option>
               </select>
 
               {/* Filtro Categoria */}

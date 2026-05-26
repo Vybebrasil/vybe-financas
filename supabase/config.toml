@@ -10,3 +10,6 @@ verify_jwt = false
 
 [functions.send-whatsapp]
 verify_jwt = true
+
+[functions.whatsapp-context]
+verify_jwt = false

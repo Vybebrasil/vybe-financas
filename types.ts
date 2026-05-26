@@ -81,6 +81,8 @@ export interface Contract {
   amount: number;
   status: ContractStatus;
   startDate: string;
+  /** Data de assinatura; com prazo em meses define o fim da vigência (endDate). */
+  signedDate?: string;
   endDate?: string;
   dueDay: number;
   notes?: string;
@@ -158,6 +160,8 @@ export interface TemplateContext {
   amount: string;
   dueDay: string;
   companyName: string;
+  pixKey?: string;
+  paymentLink?: string;
 }
 
 export interface CategoryConfig {
@@ -202,8 +206,20 @@ export interface WhatsAppIntegrationSettings {
   n8nWebhookUrl?: string;
 }
 
+export type PixKeyType = 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
+
+/** Dados de pagamento usados na régua e no atendimento IA */
+export interface PaymentIntegrationSettings {
+  pixKey?: string;
+  pixKeyType?: PixKeyType;
+  paymentLink?: string;
+  /** Texto livre (ex.: banco, titular, horário) */
+  instructions?: string;
+}
+
 export interface CompanyIntegrations {
   whatsapp?: WhatsAppIntegrationSettings;
+  payment?: PaymentIntegrationSettings;
 }
 
 export interface CompanySettings {

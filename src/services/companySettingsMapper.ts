@@ -3,6 +3,7 @@ import {
   CompanyIntegrations,
   CompanySettings,
   MessageTemplate,
+  PixKeyType,
   WhatsAppIntegrationSettings,
 } from '../../types';
 import { DEFAULT_CATEGORIES } from './categories';
@@ -27,32 +28,60 @@ interface IntegrationsDb {
     enabled?: boolean;
     n8n_webhook_url?: string;
   };
+  payment?: {
+    pix_key?: string;
+    pix_key_type?: string;
+    payment_link?: string;
+    instructions?: string;
+  };
 }
 
 export function mapIntegrationsFromDB(raw: unknown): CompanyIntegrations | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const db = raw as IntegrationsDb;
   const whatsapp = db.whatsapp;
-  if (!whatsapp) return undefined;
-  return {
-    whatsapp: {
+  const payment = db.payment;
+  if (!whatsapp && !payment) return undefined;
+  const result: CompanyIntegrations = {};
+  if (whatsapp) {
+    result.whatsapp = {
       enabled: Boolean(whatsapp.enabled),
       n8nWebhookUrl: whatsapp.n8n_webhook_url?.trim() || undefined,
-    },
-  };
+    };
+  }
+  if (payment) {
+    result.payment = {
+      pixKey: payment.pix_key?.trim() || undefined,
+      pixKeyType: (payment.pix_key_type as PixKeyType) || undefined,
+      paymentLink: payment.payment_link?.trim() || undefined,
+      instructions: payment.instructions?.trim() || undefined,
+    };
+  }
+  return result;
 }
 
 export function mapIntegrationsToDB(
   integrations: CompanyIntegrations | undefined,
 ): IntegrationsDb {
   const w = integrations?.whatsapp;
-  if (!w) return {};
-  return {
-    whatsapp: {
+  const p = integrations?.payment;
+  if (!w && !p) return {};
+  const db: IntegrationsDb = {};
+  if (w) {
+    db.whatsapp = {
       enabled: w.enabled,
       n8n_webhook_url: w.n8nWebhookUrl?.trim() || undefined,
-    },
-  };
+    };
+  }
+  if (p) {
+    db.payment = {
+      pix_key: p.pixKey?.trim() || undefined,
+      pix_key_type: p.pixKeyType || undefined,
+      payment_link: p.paymentLink?.trim() || undefined,
+      instructions: p.instructions?.trim() || undefined,
+    };
+  }
+  return db;
 }
 
 export function isWhatsAppIntegrationActive(
@@ -65,6 +94,10 @@ export function defaultWhatsAppIntegration(): WhatsAppIntegrationSettings {
   return { enabled: true, n8nWebhookUrl: '' };
 }
 
+export function defaultPaymentIntegration() {
+  return { pixKey: '', pixKeyType: 'cnpj' as const, paymentLink: '', instructions: '' };
+}
+
 export const defaultCompanySettings = (): CompanySettings => ({
   name: 'Minha Agência',
   cnpj: '',
@@ -74,7 +107,10 @@ export const defaultCompanySettings = (): CompanySettings => ({
   plans: [...DEFAULT_SERVICE_PLANS],
   messageTemplates: [...DEFAULT_MESSAGE_TEMPLATES],
   categories: [...DEFAULT_CATEGORIES],
-  integrations: { whatsapp: defaultWhatsAppIntegration() },
+  integrations: {
+    whatsapp: defaultWhatsAppIntegration(),
+    payment: defaultPaymentIntegration(),
+  },
 });
 
 export const mapCompanySettingsFromDB = (row: CompanySettingsRow): CompanySettings => ({

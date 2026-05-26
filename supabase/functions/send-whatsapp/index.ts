@@ -2,6 +2,16 @@
 // Secrets: N8N_WHATSAPP_WEBHOOK_URL, COBRANCA_WEBHOOK_TOKEN (ou N8N_WEBHOOK_SECRET)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
+import {
+  buildCobrancaN8nPayloadFromContext,
+  buildWhatsAppVybeContext,
+  normalizePhone,
+  type ClientRow,
+  type CompanySettingsRow,
+  type ContractRow,
+  type IntegrationsDb,
+  type TransactionRow,
+} from '../_shared/whatsappContext.ts';
 
 const DEFAULT_WEBHOOK_URL =
   'https://n8n.srv1704092.hstgr.cloud/webhook/cobranca-whatsapp';
@@ -19,27 +29,8 @@ interface SendBody {
   templateId?: string;
   templateName?: string;
   companyName?: string;
-}
-
-interface IntegrationsDb {
-  whatsapp?: {
-    enabled?: boolean;
-    n8n_webhook_url?: string;
-  };
-}
-
-function normalizePhone(raw: string): string {
-  const digits = raw.replace(/\D/g, '');
-  if (digits.length < 10) return '';
-  if (digits.startsWith('55')) return digits;
-  return `55${digits}`;
-}
-
-function formatValorBr(amount: number): string {
-  return new Intl.NumberFormat('pt-BR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+  usarIa?: boolean;
+  paymentLink?: string;
 }
 
 function jsonResponse(body: Record<string, unknown>, status: number) {
@@ -113,7 +104,7 @@ Deno.serve(async (req) => {
   const { data: client, error: clientError } = await supabaseUser
     .from('clients')
     .select(
-      'id, name, phone, email, contact_person, user_id, active_plan, monthly_fee, due_day',
+      'id, name, phone, email, contact_person, user_id, active_plan, monthly_fee, due_day, cnpj, contract_status',
     )
     .eq('id', body.clientId)
     .maybeSingle();
@@ -133,11 +124,33 @@ Deno.serve(async (req) => {
   const ownerId = client.user_id as string;
   const supabaseAdmin = createClient(supabaseUrl, serviceKey);
 
-  const { data: settingsRow } = await supabaseAdmin
-    .from('company_settings')
-    .select('integrations, name')
-    .eq('user_id', ownerId)
-    .maybeSingle();
+  const now = new Date();
+  const from = `${now.getFullYear()}-${String(now.getMonth() - 5).padStart(2, '0')}-01`;
+  const to = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-31`;
+
+  const [{ data: settingsRow }, { data: txs }, { data: ctrs }] = await Promise.all([
+    supabaseAdmin
+      .from('company_settings')
+      .select(
+        'integrations, name, cnpj, email, phone, address, service_plans, message_templates',
+      )
+      .eq('user_id', ownerId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('transactions')
+      .select('id, client_id, type, category, description, amount, date, status')
+      .eq('client_id', client.id)
+      .gte('date', from)
+      .lte('date', to),
+    supabaseAdmin
+      .from('contracts')
+      .select(
+        'id, title, amount, status, start_date, end_date, due_day, notes, template_key, pdf_url, pdf_file_name',
+      )
+      .eq('client_id', client.id)
+      .order('start_date', { ascending: false })
+      .limit(10),
+  ]);
 
   const integrations = (settingsRow?.integrations ?? {}) as IntegrationsDb;
   const whatsapp = integrations.whatsapp;
@@ -157,14 +170,29 @@ Deno.serve(async (req) => {
     Deno.env.get('N8N_WHATSAPP_WEBHOOK_URL')?.trim() ||
     DEFAULT_WEBHOOK_URL;
 
-  const n8nPayload = {
+  const settings = settingsRow as CompanySettingsRow | null;
+  if (body.companyName?.trim() && settings) {
+    settings.name = body.companyName.trim();
+  }
+
+  const ctx = buildWhatsAppVybeContext({
     telefone: phone,
-    valor: formatValorBr(Number(client.monthly_fee) || 0),
-    nome: String(client.contact_person || client.name || 'Cliente'),
-    vencimento: `Dia ${client.due_day ?? 1}`,
-    mensagem: body.message.trim(),
-    id_fatura: String(client.id),
-  };
+    client: client as ClientRow,
+    settings,
+    transactions: (txs as TransactionRow[]) ?? [],
+    contracts: (ctrs as ContractRow[]) ?? [],
+    identificacao: { metodo: 'telefone', confianca: 'alta' },
+  });
+
+  if (body.paymentLink?.trim() && ctx.pagamento) {
+    ctx.pagamento.link_pagamento = body.paymentLink.trim();
+  }
+
+  const n8nPayload = buildCobrancaN8nPayloadFromContext(
+    ctx,
+    body.message.trim(),
+    body.usarIa !== false,
+  );
 
   const n8nHeaders: Record<string, string> = {
     'Content-Type': 'application/json',

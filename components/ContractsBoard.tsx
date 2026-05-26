@@ -1,7 +1,11 @@
 import React, { useMemo } from 'react';
 import { Client, Contract, ContractStatus } from '../types';
 import { formatCurrency } from '../utils';
-import { FileText, Pencil, Plus, Trash2, FileType } from 'lucide-react';
+import {
+  formatDateBr,
+  getContractExpiryLevel,
+} from '../src/services/contractValidity';
+import { AlertTriangle, FileText, Pencil, Plus, Trash2, FileType } from 'lucide-react';
 
 const COLUMNS: { status: ContractStatus; label: string; accent: string }[] = [
   { status: 'Pendente', label: 'Rascunho / Pendente', accent: 'border-amber-900/50' },
@@ -71,10 +75,17 @@ const ContractsBoard: React.FC<ContractsBoardProps> = ({
               )}
               {byStatus[col.status].map((contract) => {
                 const client = clientMap.get(contract.clientId);
+                const expiry = getContractExpiryLevel(contract);
                 return (
                   <div
                     key={contract.id}
-                    className="bg-vybe-card border border-gray-800 rounded-lg p-3 hover:border-gray-600 transition-colors group"
+                    className={`bg-vybe-card border rounded-lg p-3 hover:border-gray-600 transition-colors group ${
+                      expiry === 'expiring_soon'
+                        ? 'border-amber-700/60'
+                        : expiry === 'expired'
+                          ? 'border-red-900/50'
+                          : 'border-gray-800'
+                    }`}
                   >
                     <div className="flex items-start gap-2 mb-2">
                       <FileText size={16} className="text-vybe-accent shrink-0 mt-0.5" />
@@ -85,6 +96,27 @@ const ContractsBoard: React.FC<ContractsBoardProps> = ({
                         </p>
                       </div>
                     </div>
+                    {contract.endDate && (
+                      <p className="text-[11px] text-gray-500 mb-1">
+                        Vigência até {formatDateBr(contract.endDate)}
+                        {contract.signedDate && (
+                          <span className="text-gray-600">
+                            {' '}
+                            · assin. {formatDateBr(contract.signedDate)}
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    {expiry === 'expiring_soon' && (
+                      <p className="text-[11px] text-amber-400 flex items-center gap-1 mb-2 font-medium">
+                        <AlertTriangle size={12} /> Encerra em até 30 dias
+                      </p>
+                    )}
+                    {expiry === 'expired' && (
+                      <p className="text-[11px] text-red-400 flex items-center gap-1 mb-2 font-medium">
+                        <AlertTriangle size={12} /> Vigência encerrada
+                      </p>
+                    )}
                     <p className="text-sm font-bold text-vybe-accent mb-2">
                       {formatCurrency(contract.amount)}
                       <span className="text-gray-500 font-normal text-xs ml-1">

@@ -8,6 +8,8 @@ export const TEMPLATE_VARIABLES = [
   { key: '{{amount}}', label: 'Valor formatado' },
   { key: '{{dueDay}}', label: 'Dia de vencimento' },
   { key: '{{companyName}}', label: 'Nome da empresa' },
+  { key: '{{pixKey}}', label: 'Chave PIX' },
+  { key: '{{paymentLink}}', label: 'Link de pagamento' },
 ] as const;
 
 export const BILLING_STAGE_LABELS: Record<MessageTemplate['stage'], string> = {
@@ -20,6 +22,7 @@ export const BILLING_STAGE_LABELS: Record<MessageTemplate['stage'], string> = {
 export function buildTemplateContext(
   client: Client,
   companyName: string,
+  payment?: { pixKey?: string; paymentLink?: string },
 ): TemplateContext {
   return {
     contactPerson: client.contactPerson || client.name,
@@ -28,6 +31,8 @@ export function buildTemplateContext(
     amount: formatCurrency(client.monthlyFee),
     dueDay: String(client.dueDay),
     companyName: companyName || 'Agência',
+    pixKey: payment?.pixKey || '',
+    paymentLink: payment?.paymentLink || '',
   };
 }
 
@@ -38,7 +43,9 @@ export function renderMessageTemplate(body: string, context: TemplateContext): s
     .replace(/\{\{activePlan\}\}/g, context.activePlan)
     .replace(/\{\{amount\}\}/g, context.amount)
     .replace(/\{\{dueDay\}\}/g, context.dueDay)
-    .replace(/\{\{companyName\}\}/g, context.companyName);
+    .replace(/\{\{companyName\}\}/g, context.companyName)
+    .replace(/\{\{pixKey\}\}/g, context.pixKey ?? '')
+    .replace(/\{\{paymentLink\}\}/g, context.paymentLink ?? '');
 }
 
 /** Dígitos com DDI 55 para Evolution / wa.me */

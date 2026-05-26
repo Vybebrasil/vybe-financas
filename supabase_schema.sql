@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS contracts (
   amount NUMERIC NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'Ativo',
   start_date DATE NOT NULL,
+  signed_date DATE,
   end_date DATE,
   due_day INTEGER NOT NULL DEFAULT 1,
   notes TEXT,
