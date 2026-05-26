@@ -36,6 +36,18 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
     locked: true,
   },
   {
+    id: 'cat-variable-expense',
+    label: Category.VARIABLE_EXPENSE,
+    transactionType: TransactionType.EXPENSE,
+    locked: true,
+  },
+  {
+    id: 'cat-fixed-expense',
+    label: Category.FIXED_EXPENSE,
+    transactionType: TransactionType.EXPENSE,
+    locked: true,
+  },
+  {
     id: 'cat-other',
     label: Category.OTHER,
     transactionType: TransactionType.EXPENSE,
@@ -100,6 +112,8 @@ export function getCategoryChartColor(label: string, index: number): string {
     [Category.ADS]: '#F59E0B',
     [Category.TOOLS]: '#3B82F6',
     [Category.SUPPLIES]: '#10B981',
+    [Category.VARIABLE_EXPENSE]: '#14B8A6',
+    [Category.FIXED_EXPENSE]: '#6366F1',
     [Category.OTHER]: '#8B5CF6',
     [Category.CLIENT_PAYMENT]: '#6B7280',
   };

@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Employee, Subscription, Category, Transaction, TransactionType, TransactionStatus, PaymentMethod } from '../types';
 import { formatCurrency, generateId } from '../utils';
 import { computeEmployeeAmountToPay } from '../src/services/employeePayroll';
-import { Users, Plus, Trash2, Laptop, ShoppingBag, DollarSign, Eye, Pencil, X, Save, History } from 'lucide-react';
+import { getCurrentMonthKey } from '../src/services/recurringLogic';
+import { Users, Plus, Trash2, Laptop, ShoppingBag, DollarSign, Eye, Pencil, X, Save, History, Pin } from 'lucide-react';
 import SubscriptionHistoryModal from './SubscriptionHistoryModal';
 
 interface ExpensesViewProps {
@@ -50,8 +51,41 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
 
-  const [supplyDesc, setSupplyDesc] = useState('');
-  const [supplyCost, setSupplyCost] = useState('');
+  const [variableDesc, setVariableDesc] = useState('');
+  const [variableCost, setVariableCost] = useState('');
+  const [fixedDesc, setFixedDesc] = useState('');
+  const [fixedCost, setFixedCost] = useState('');
+
+  const monthKey = getCurrentMonthKey();
+
+  const isVariableExpenseCategory = (category: string) =>
+    category === Category.VARIABLE_EXPENSE || category === Category.SUPPLIES;
+
+  const variableMonthTotal = useMemo(
+    () =>
+      transactions
+        .filter(
+          (t) =>
+            t.type === TransactionType.EXPENSE &&
+            t.date.startsWith(monthKey) &&
+            isVariableExpenseCategory(t.category),
+        )
+        .reduce((sum, t) => sum + t.amount, 0),
+    [transactions, monthKey],
+  );
+
+  const fixedMonthTotal = useMemo(
+    () =>
+      transactions
+        .filter(
+          (t) =>
+            t.type === TransactionType.EXPENSE &&
+            t.date.startsWith(monthKey) &&
+            t.category === Category.FIXED_EXPENSE,
+        )
+        .reduce((sum, t) => sum + t.amount, 0),
+    [transactions, monthKey],
+  );
 
   // Handlers
   const handleAddEmployee = (e: React.FormEvent) => {
@@ -124,21 +158,38 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
     setIsSubModalOpen(false);
   };
 
-  const handleAddSupply = (e: React.FormEvent) => {
+  const handleAddVariableExpense = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!supplyDesc || !supplyCost) return;
+    if (!variableDesc || !variableCost) return;
     onQuickExpense({
       id: generateId(),
-      description: supplyDesc,
-      amount: parseFloat(supplyCost),
-      category: Category.SUPPLIES,
+      description: variableDesc,
+      amount: parseFloat(variableCost),
+      category: Category.VARIABLE_EXPENSE,
       type: TransactionType.EXPENSE,
       date: new Date().toISOString().split('T')[0],
       status: TransactionStatus.PAID,
       paymentMethod: 'PIX',
     });
-    setSupplyDesc('');
-    setSupplyCost('');
+    setVariableDesc('');
+    setVariableCost('');
+  };
+
+  const handleAddFixedExpense = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fixedDesc || !fixedCost) return;
+    onQuickExpense({
+      id: generateId(),
+      description: fixedDesc,
+      amount: parseFloat(fixedCost),
+      category: Category.FIXED_EXPENSE,
+      type: TransactionType.EXPENSE,
+      date: new Date().toISOString().split('T')[0],
+      status: TransactionStatus.PAID,
+      paymentMethod: 'PIX',
+    });
+    setFixedDesc('');
+    setFixedCost('');
   };
 
   const handlePayEmployee = (emp: Employee) => {
@@ -488,26 +539,114 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
         </div>
       </section>
 
-      {/* SECTION 3: QUICK EXPENSES */}
+      {/* SECTION 3: GASTOS VARIÁVEIS */}
       <section className="bg-vybe-card border border-gray-800 rounded-xl p-6 shadow-lg">
-         <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-6">
-            <ShoppingBag className="text-vybe-accent" />
-            Lançamento de Insumos & Variáveis
-         </h2>
-         <form onSubmit={handleAddSupply} className="flex flex-col md:flex-row gap-4 items-end bg-[#121212] p-4 rounded-lg border border-gray-800">
-            <div className="w-full md:flex-1">
-               <label className="text-xs text-gray-500 mb-1 block">Descrição do Gasto</label>
-               <input value={supplyDesc} onChange={e => setSupplyDesc(e.target.value)} placeholder="Ex: Material de Escritório, Lanche, Uber..." className="w-full bg-vybe-card border border-gray-700 rounded-lg p-3 text-white focus:border-vybe-accent outline-none" required />
-            </div>
-            <div className="w-full md:w-48">
-               <label className="text-xs text-gray-500 mb-1 block">Valor (R$)</label>
-               <input type="number" value={supplyCost} onChange={e => setSupplyCost(e.target.value)} placeholder="0,00" className="w-full bg-vybe-card border border-gray-700 rounded-lg p-3 text-white focus:border-vybe-accent outline-none" required />
-            </div>
-            <button type="submit" className="w-full md:w-auto px-6 py-3 bg-vybe-red hover:bg-red-600 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2">
-               <DollarSign size={18} /> Lançar Saída
-            </button>
-         </form>
-         <p className="text-xs text-gray-500 mt-2 ml-1">* Esta ação redirecionará para o formulário financeiro para confirmação.</p>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <ShoppingBag className="text-vybe-accent" />
+              Gastos Variáveis
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Despesas pontuais do mês (material, transporte, refeições, etc.)
+            </p>
+          </div>
+          <div className="bg-[#121212] px-4 py-2 rounded-lg border border-gray-700">
+            <span className="text-xs text-gray-400 block">Total no mês</span>
+            <span className="text-lg font-bold text-teal-400">
+              {formatCurrency(variableMonthTotal)}
+            </span>
+          </div>
+        </div>
+        <form
+          onSubmit={handleAddVariableExpense}
+          className="flex flex-col md:flex-row gap-4 items-end bg-[#121212] p-4 rounded-lg border border-gray-800"
+        >
+          <div className="w-full md:flex-1">
+            <label className="text-xs text-gray-500 mb-1 block">Descrição</label>
+            <input
+              value={variableDesc}
+              onChange={(e) => setVariableDesc(e.target.value)}
+              placeholder="Ex: Uber, almoço, material de escritório..."
+              className="w-full bg-vybe-card border border-gray-700 rounded-lg p-3 text-white focus:border-vybe-accent outline-none"
+              required
+            />
+          </div>
+          <div className="w-full md:w-48">
+            <label className="text-xs text-gray-500 mb-1 block">Valor (R$)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={variableCost}
+              onChange={(e) => setVariableCost(e.target.value)}
+              placeholder="0,00"
+              className="w-full bg-vybe-card border border-gray-700 rounded-lg p-3 text-white focus:border-vybe-accent outline-none"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full md:w-auto px-6 py-3 bg-vybe-red hover:bg-red-600 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            <DollarSign size={18} /> Lançar saída
+          </button>
+        </form>
+      </section>
+
+      {/* SECTION 4: GASTOS FIXOS */}
+      <section className="bg-vybe-card border border-gray-800 rounded-xl p-6 shadow-lg">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <Pin className="text-vybe-accent" />
+              Gastos Fixos
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Despesas recorrentes (aluguel, internet, contador, energia, etc.)
+            </p>
+          </div>
+          <div className="bg-[#121212] px-4 py-2 rounded-lg border border-indigo-900/40">
+            <span className="text-xs text-gray-400 block">Total no mês</span>
+            <span className="text-lg font-bold text-indigo-400">
+              {formatCurrency(fixedMonthTotal)}
+            </span>
+          </div>
+        </div>
+        <form
+          onSubmit={handleAddFixedExpense}
+          className="flex flex-col md:flex-row gap-4 items-end bg-[#121212] p-4 rounded-lg border border-gray-800"
+        >
+          <div className="w-full md:flex-1">
+            <label className="text-xs text-gray-500 mb-1 block">Descrição</label>
+            <input
+              value={fixedDesc}
+              onChange={(e) => setFixedDesc(e.target.value)}
+              placeholder="Ex: Aluguel, internet, contabilidade..."
+              className="w-full bg-vybe-card border border-gray-700 rounded-lg p-3 text-white focus:border-vybe-accent outline-none"
+              required
+            />
+          </div>
+          <div className="w-full md:w-48">
+            <label className="text-xs text-gray-500 mb-1 block">Valor (R$)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={fixedCost}
+              onChange={(e) => setFixedCost(e.target.value)}
+              placeholder="0,00"
+              className="w-full bg-vybe-card border border-gray-700 rounded-lg p-3 text-white focus:border-vybe-accent outline-none"
+              required
+            />
+          </div>
+          <button
+            type="submit"
+            className="w-full md:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            <DollarSign size={18} /> Lançar saída
+          </button>
+        </form>
       </section>
 
     </div>

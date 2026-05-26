@@ -15,7 +15,9 @@ export enum Category {
   TOOLS = 'Ferramentas/Software',
   ADS = 'Tráfego Pago',
   OTHER = 'Outros',
-  SUPPLIES = 'Insumos/Escritório',
+  SUPPLIES = 'Insumos/Escritório', // legado — preferir VARIABLE_EXPENSE
+  VARIABLE_EXPENSE = 'Gastos Variáveis',
+  FIXED_EXPENSE = 'Gastos Fixos',
 }
 
 export type PaymentMethod = 'PIX' | 'BOLETO' | 'CARTAO' | 'DINHEIRO' | 'OUTRO';
