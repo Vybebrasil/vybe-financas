@@ -163,7 +163,6 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
     });
   };
 
-  const totalSalaries = employees.reduce((acc, curr) => acc + curr.salary, 0);
   const totalSubs = subscriptions.reduce((acc, curr) => acc + curr.cost, 0);
 
   return (
@@ -292,8 +291,10 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
           </div>
           <div className="flex items-center gap-3">
             <div className="bg-[#121212] px-4 py-2 rounded-lg border border-gray-700">
-              <span className="text-xs text-gray-400 block">Custo Mensal Estimado</span>
-              <span className="text-lg font-bold text-white">{formatCurrency(totalSalaries)}</span>
+              <span className="text-xs text-gray-400 block">Equipe</span>
+              <span className="text-lg font-bold text-white">
+                {employees.length} colaborador{employees.length !== 1 ? 'es' : ''}
+              </span>
             </div>
             <button
               type="button"
@@ -316,14 +317,13 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                   </div>
                   <div>
                     <h4 className="font-bold text-white text-sm">{emp.name}</h4>
-                    <p className="text-xs text-gray-500">{emp.role}</p>
+                    <p className="text-xs text-gray-500">
+                      {emp.role}
+                      {emp.paymentDay ? ` · Pagamento dia ${emp.paymentDay}` : ''}
+                    </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-                  <div className="text-right">
-                    <span className="block text-xs text-gray-400">Salário</span>
-                    <span className="block font-bold text-vybe-red text-sm">{formatCurrency(emp.salary)}</span>
-                  </div>
+                <div className="flex items-center gap-2 w-full md:w-auto justify-end">
                   <div className="flex gap-2">
                     {onViewEmployee && (
                         <button onClick={() => onViewEmployee(emp)} title="Ver Detalhes" className="p-2 bg-gray-800 text-gray-400 rounded hover:bg-gray-700 hover:text-white border border-gray-700 transition-colors">
