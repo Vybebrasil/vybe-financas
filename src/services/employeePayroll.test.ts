@@ -17,58 +17,59 @@ const employee: Employee = {
 };
 
 describe('employeePayroll', () => {
-  it('calcula A pagar = salário + bônus − despesas vinculadas do mês', () => {
+  it('calcula A pagar = salário + bônus − despesas vinculadas por employeeId', () => {
     const month = '2026-05';
-    const txs = [
-      {
-        id: '1',
-        description: 'Vale transporte - Ana Silva',
-        amount: 200,
-        type: TransactionType.EXPENSE,
-        category: Category.OTHER,
-        date: '2026-05-10',
-        status: TransactionStatus.PAID,
-        paymentMethod: 'PIX' as const,
-      },
-      {
-        id: '2',
-        description: salaryDescriptionForEmployee('Ana Silva'),
-        amount: 3000,
-        type: TransactionType.EXPENSE,
-        category: Category.SALARY,
-        date: '2026-05-05',
-        status: TransactionStatus.PAID,
-        paymentMethod: 'PIX' as const,
-      },
-    ];
-
-    const result = computeEmployeeAmountToPay(employee, txs, month);
-    expect(result.salary).toBe(3000);
-    expect(result.bonus).toBe(500);
-    expect(result.linkedExpenses).toBe(200);
-    expect(result.amountToPay).toBe(3300);
-  });
-
-  it('vincula por employeeId quando informado', () => {
     const result = computeEmployeeAmountToPay(
       employee,
       [
         {
           id: '1',
-          description: 'Reembolso',
-          amount: 150,
+          description: 'Vale transporte',
+          amount: 200,
           type: TransactionType.EXPENSE,
           category: Category.OTHER,
-          date: '2026-05-12',
+          date: '2026-05-10',
+          status: TransactionStatus.PAID,
+          paymentMethod: 'PIX',
+          employeeId: 'e1',
+        },
+        {
+          id: '2',
+          description: salaryDescriptionForEmployee('Ana Silva'),
+          amount: 3000,
+          type: TransactionType.EXPENSE,
+          category: Category.SALARY,
+          date: '2026-05-05',
           status: TransactionStatus.PAID,
           paymentMethod: 'PIX',
           employeeId: 'e1',
         },
       ],
+      month,
+    );
+    expect(result.linkedExpenses).toBe(200);
+    expect(result.amountToPay).toBe(3300);
+  });
+
+  it('ignora despesas sem employeeId mesmo com nome na descrição', () => {
+    const result = computeEmployeeAmountToPay(
+      employee,
+      [
+        {
+          id: '1',
+          description: 'Vale transporte - Ana Silva',
+          amount: 200,
+          type: TransactionType.EXPENSE,
+          category: Category.OTHER,
+          date: '2026-05-10',
+          status: TransactionStatus.PAID,
+          paymentMethod: 'PIX',
+        },
+      ],
       '2026-05',
     );
-    expect(result.linkedExpenses).toBe(150);
-    expect(result.amountToPay).toBe(3350);
+    expect(result.linkedExpenses).toBe(0);
+    expect(result.amountToPay).toBe(3500);
   });
 
   it('não conta lançamento de salário como despesa vinculada', () => {
@@ -84,6 +85,7 @@ describe('employeePayroll', () => {
           date: '2026-05-05',
           status: TransactionStatus.PAID,
           paymentMethod: 'PIX',
+          employeeId: 'e1',
         },
       ],
       '2026-05',

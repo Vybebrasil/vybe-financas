@@ -33,12 +33,9 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
   // Filter Transactions for History
   const history = useMemo(() => {
     if (!employee) return [];
-    const term = employee.name.toLowerCase();
-    return transactions.filter((t) => {
-      if (t.type !== TransactionType.EXPENSE) return false;
-      if (t.employeeId === employee.id) return true;
-      return t.description.toLowerCase().includes(term);
-    });
+    return transactions.filter(
+      (t) => t.type === TransactionType.EXPENSE && t.employeeId === employee.id,
+    );
   }, [employee, transactions]);
 
   const totalPaid = useMemo(() => {
@@ -293,7 +290,7 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                         </div>
                         <div className="p-3 border-t border-gray-800 bg-[#1E1E1E] rounded-b-xl">
                             <p className="text-[10px] text-gray-500 text-center">
-                                Histórico baseado em despesas que contenham "{employee.name}" na descrição.
+                                Histórico de despesas vinculadas a este colaborador.
                             </p>
                         </div>
                     </div>

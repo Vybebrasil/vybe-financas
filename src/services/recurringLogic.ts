@@ -44,6 +44,18 @@ export const alreadyScheduled = (
     (t) => t.description === description && isSameMonth(t.date, monthKey),
   );
 
+export const salaryAlreadyScheduled = (
+  transactions: Transaction[],
+  employeeId: string,
+  monthKey: string,
+): boolean =>
+  transactions.some(
+    (t) =>
+      t.employeeId === employeeId &&
+      t.category === Category.SALARY &&
+      isSameMonth(t.date, monthKey),
+  );
+
 export interface RecurringData {
   transactions: Transaction[];
   clients: Client[];
@@ -77,7 +89,12 @@ export function buildMonthlyRecurringPayloads(
 
   for (const emp of employees) {
     const description = salaryDescriptionForEmployee(emp.name);
-    if (alreadyScheduled(transactions, description, monthKey)) continue;
+    if (
+      alreadyScheduled(transactions, description, monthKey) ||
+      salaryAlreadyScheduled(transactions, emp.id, monthKey)
+    ) {
+      continue;
+    }
     toCreate.push({
       description,
       amount: emp.salary,
@@ -86,6 +103,7 @@ export function buildMonthlyRecurringPayloads(
       date: dateInMonth(monthKey, emp.paymentDay),
       status: TransactionStatus.PENDING,
       paymentMethod: 'PIX',
+      employeeId: emp.id,
     });
   }
 

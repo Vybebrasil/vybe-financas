@@ -117,6 +117,7 @@ Deno.serve(async (req) => {
         date: dateInMonth(monthKey, e.payment_day),
         status: 'PENDING',
         payment_method: 'PIX',
+        employee_id: e.id,
       });
     }
 

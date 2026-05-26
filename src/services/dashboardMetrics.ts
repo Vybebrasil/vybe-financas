@@ -13,7 +13,6 @@ import { getDelinquencyReport } from './delinquency';
 import { isClientPaymentCategory } from './categories';
 import {
   getCurrentMonthKey,
-  salaryDescriptionForEmployee,
   subscriptionDescriptionFor,
 } from './recurringLogic';
 
@@ -298,11 +297,10 @@ function isSalaryTransactionForEmployee(
   employee: Employee,
 ): boolean {
   if (transaction.type !== TransactionType.EXPENSE) return false;
-  const expected = salaryDescriptionForEmployee(employee.name);
-  if (transaction.description === expected) return true;
-  if (transaction.category !== Category.SALARY) return false;
-  const name = employee.name.trim().toLowerCase();
-  return name.length > 0 && transaction.description.toLowerCase().includes(name);
+  return (
+    transaction.employeeId === employee.id &&
+    transaction.category === Category.SALARY
+  );
 }
 
 export function computePayrollMonthStatus(

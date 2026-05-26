@@ -1,5 +1,5 @@
-import { Employee, Transaction, TransactionType } from '../../types';
-import { getCurrentMonthKey, salaryDescriptionForEmployee } from './recurringLogic';
+import { Category, Employee, Transaction, TransactionType } from '../../types';
+import { getCurrentMonthKey } from './recurringLogic';
 
 export interface EmployeePayrollBreakdown {
   salary: number;
@@ -13,21 +13,11 @@ export function getEmployeeLinkedTransactions(
   transactions: Transaction[],
   monthKey = getCurrentMonthKey(),
 ): Transaction[] {
-  const name = employee.name.trim().toLowerCase();
-  if (!name) return [];
-
-  const salaryDesc = salaryDescriptionForEmployee(employee.name).toLowerCase();
-
   return transactions.filter((t) => {
     if (t.type !== TransactionType.EXPENSE) return false;
     if (!t.date.startsWith(monthKey)) return false;
-    if (t.employeeId === employee.id) {
-      const desc = t.description.toLowerCase();
-      return desc !== salaryDesc;
-    }
-    const desc = t.description.toLowerCase();
-    if (!desc.includes(name)) return false;
-    if (desc === salaryDesc) return false;
+    if (t.employeeId !== employee.id) return false;
+    if (t.category === Category.SALARY) return false;
     return true;
   });
 }

@@ -140,6 +140,7 @@ describe('dashboardMetrics', () => {
           date: '2026-05-05',
           status: TransactionStatus.PAID,
           paymentMethod: 'PIX',
+          employeeId: 'e1',
         },
         {
           id: 't2',
@@ -150,6 +151,7 @@ describe('dashboardMetrics', () => {
           date: '2026-05-10',
           status: TransactionStatus.PENDING,
           paymentMethod: 'PIX',
+          employeeId: 'e2',
         },
       ],
       range,
