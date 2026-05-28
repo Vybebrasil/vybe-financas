@@ -28,6 +28,23 @@ const FinancialChart: React.FC<FinancialChartProps> = ({
     ),
     1
   );
+  const minValue = 0;
+  const valueRange = Math.max(1, maxValue - minValue);
+  const chartHeight = 220;
+  const chartWidth = Math.max(320, data.length * 72);
+  const xStep = data.length > 1 ? chartWidth / (data.length - 1) : chartWidth;
+  const yForValue = (value: number) =>
+    chartHeight - ((value - minValue) / valueRange) * chartHeight;
+
+  const series = useMemo(
+    () => [
+      { key: 'income', color: '#10B981', values: data.map((d) => d.income) },
+      { key: 'expense', color: '#EF4444', values: data.map((d) => d.expense) },
+      { key: 'pendingIncome', color: '#FBBF24', values: data.map((d) => d.pendingIncome) },
+      { key: 'pendingExpense', color: '#D97706', values: data.map((d) => d.pendingExpense) },
+    ],
+    [data],
+  );
 
   const tabs: { id: ChartPeriod; label: string; icon: React.ReactNode }[] = [
     { id: 'daily', label: 'Diário', icon: <Clock size={14} /> },
@@ -101,84 +118,83 @@ const FinancialChart: React.FC<FinancialChartProps> = ({
       </div>
 
       {/* Chart Container */}
-      <div className="relative h-64 w-full mb-6">
-        {/* Background Grid Lines */}
-        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="border-t border-gray-800 w-full h-full last:border-0 opacity-30"></div>
-          ))}
-        </div>
+      <div className="relative w-full mb-6">
+        {data.length === 0 ? (
+          <div className="h-64 w-full flex items-center justify-center text-gray-500 text-sm">
+            Sem dados para este período
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <div
+              className="relative"
+              style={{ minWidth: `${chartWidth + 16}px` }}
+            >
+              <svg
+                width={chartWidth}
+                height={chartHeight}
+                className="block"
+                role="img"
+                aria-label="Gráfico de linha do fluxo de caixa"
+              >
+                {[...Array(5)].map((_, i) => {
+                  const y = (chartHeight / 4) * i;
+                  return (
+                    <line
+                      key={`grid-${i}`}
+                      x1={0}
+                      x2={chartWidth}
+                      y1={y}
+                      y2={y}
+                      stroke="#2b2b2b"
+                      strokeWidth="1"
+                    />
+                  );
+                })}
 
-        {/* Bars Container */}
-        <div className="absolute inset-0 flex items-end justify-between gap-2 md:gap-4 pt-4 pb-6 px-2">
-          {data.length === 0 ? (
-            <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
-                Sem dados para este período
-            </div>
-          ) : (
-          data.map((item, index) => {
-            const incomeHeight = (item.income / maxValue) * 100;
-            const expenseHeight = (item.expense / maxValue) * 100;
-            const pendingIncomeHeight = (item.pendingIncome / maxValue) * 100;
-            const pendingExpenseHeight = (item.pendingExpense / maxValue) * 100;
+                {series.map((s) => {
+                  const points = s.values
+                    .map((value, idx) => `${idx * xStep},${yForValue(value)}`)
+                    .join(' ');
+                  return (
+                    <g key={s.key}>
+                      <polyline
+                        fill="none"
+                        stroke={s.color}
+                        strokeWidth="2.5"
+                        points={points}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      {s.values.map((value, idx) => (
+                        <circle
+                          key={`${s.key}-${idx}`}
+                          cx={idx * xStep}
+                          cy={yForValue(value)}
+                          r="3"
+                          fill={s.color}
+                        >
+                          <title>{formatCurrency(value)}</title>
+                        </circle>
+                      ))}
+                    </g>
+                  );
+                })}
+              </svg>
 
-            return (
-              <div key={item.key} className="flex-1 flex flex-col items-center justify-end h-full group min-w-[40px]">
-                {/* Bar Wrapper */}
-                <div className="w-full flex justify-center items-end gap-0.5 md:gap-1 h-full relative px-0.5">
-                  
-                  {/* Tooltip Overlay */}
-                  <div className="absolute bottom-full mb-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-[#252525] border border-gray-700 text-white text-xs rounded-lg p-3 whitespace-nowrap z-20 pointer-events-none shadow-2xl transform translate-y-2 group-hover:translate-y-0">
-                    <p className="font-bold mb-2 pb-1 border-b border-gray-700">{item.label}</p>
-                    <div className="flex items-center justify-between gap-4 mb-1">
-                        <span className="text-gray-400">Entrada (paga):</span>
-                        <span className="text-vybe-green font-mono">{formatCurrency(item.income)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4 mb-1">
-                        <span className="text-gray-400 flex items-center gap-1"><Clock size={10} className="text-amber-400" /> Ent. pendente:</span>
-                        <span className="text-amber-400 font-mono">{formatCurrency(item.pendingIncome)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4 mb-1">
-                        <span className="text-gray-400">Saída (paga):</span>
-                        <span className="text-vybe-red font-mono">{formatCurrency(item.expense)}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                        <span className="text-gray-400 flex items-center gap-1"><Clock size={10} className="text-amber-500" /> Saída pendente:</span>
-                        <span className="text-amber-500 font-mono">{formatCurrency(item.pendingExpense)}</span>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{ height: `${incomeHeight}%`, animationDelay: `${index * 50}ms` }}
-                    className="flex-1 max-w-[28px] bg-vybe-green hover:bg-emerald-400 rounded-t-sm transition-all duration-300 origin-bottom animate-bar-grow opacity-90 hover:opacity-100"
-                    title="Entrada paga"
-                  />
-                  <div
-                    style={{ height: `${pendingIncomeHeight}%`, animationDelay: `${index * 50 + 12}ms` }}
-                    className={`flex-1 max-w-[28px] bg-amber-400/85 border border-amber-300/40 rounded-t-sm transition-all duration-300 origin-bottom animate-bar-grow ${item.pendingIncome > 0 ? 'opacity-90' : 'opacity-0'}`}
-                    title="Entrada pendente"
-                  />
-                  <div
-                    style={{ height: `${expenseHeight}%`, animationDelay: `${index * 50 + 25}ms` }}
-                    className="flex-1 max-w-[28px] bg-vybe-red hover:bg-rose-400 rounded-t-sm transition-all duration-300 origin-bottom animate-bar-grow opacity-90 hover:opacity-100"
-                    title="Saída paga"
-                  />
-                  <div
-                    style={{ height: `${pendingExpenseHeight}%`, animationDelay: `${index * 50 + 37}ms` }}
-                    className={`flex-1 max-w-[28px] bg-amber-600/85 border border-amber-500/40 rounded-t-sm transition-all duration-300 origin-bottom animate-bar-grow ${item.pendingExpense > 0 ? 'opacity-90' : 'opacity-0'}`}
-                    title="Saída pendente"
-                  />
-                </div>
-
-                {/* X-Axis Label */}
-                <span className="mt-3 text-[10px] md:text-xs text-gray-500 font-medium uppercase tracking-wider group-hover:text-white transition-colors truncate w-full text-center">
-                  {item.label}
-                </span>
+              <div className="mt-3 grid" style={{ gridTemplateColumns: `repeat(${data.length}, minmax(40px, 1fr))` }}>
+                {data.map((item) => (
+                  <span
+                    key={item.key}
+                    className="text-[10px] md:text-xs text-gray-500 font-medium uppercase tracking-wider truncate text-center"
+                    title={item.label}
+                  >
+                    {item.label}
+                  </span>
+                ))}
               </div>
-            );
-          })
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Year Slider (Only visible for Monthly view usually, but functional for context) */}
