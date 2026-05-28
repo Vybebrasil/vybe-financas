@@ -253,14 +253,14 @@ const DashboardView: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <DashboardCard
             title="Entrada prevista total"
-            subtitle="Pendentes + mensalidades ativas não lançadas"
+            subtitle="Todas as entradas do mês (pagas e pendentes)"
             value={forecast.expectedIncomeTotal}
             type="income"
             icon={<ArrowDownLeft size={20} />}
           />
           <DashboardCard
             title="Saída prevista total"
-            subtitle="Pendentes + recorrências do mês (folha e apps)"
+            subtitle="Todas as saídas do mês (pagas e pendentes)"
             value={forecast.expectedExpenseTotal}
             type="expense"
             icon={<ArrowUpRight size={20} />}

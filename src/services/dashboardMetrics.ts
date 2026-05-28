@@ -180,6 +180,26 @@ function transactionsInMonth(transactions: Transaction[], monthKey: string): Tra
   return transactions.filter((t) => t.date.split('T')[0].startsWith(monthKey));
 }
 
+/** Soma todas as entradas do mês (pagas + pendentes). */
+export function totalIncomeInMonth(
+  transactions: Transaction[],
+  monthKey: string,
+): number {
+  return transactionsInMonth(transactions, monthKey)
+    .filter((t) => t.type === TransactionType.INCOME)
+    .reduce((s, t) => s + t.amount, 0);
+}
+
+/** Soma todas as saídas do mês (pagas + pendentes). */
+export function totalExpenseInMonth(
+  transactions: Transaction[],
+  monthKey: string,
+): number {
+  return transactionsInMonth(transactions, monthKey)
+    .filter((t) => t.type === TransactionType.EXPENSE)
+    .reduce((s, t) => s + t.amount, 0);
+}
+
 function clientHasIncomeInMonth(
   client: Client,
   monthTxs: Transaction[],
@@ -192,7 +212,8 @@ function clientHasIncomeInMonth(
   );
 }
 
-export function expectedIncomeForMonth(
+/** Projeção futura: pendentes + recorrências ainda não lançadas no extrato. */
+export function projectedIncomeForMonth(
   clients: Client[],
   transactions: Transaction[],
   monthKey: string,
@@ -215,7 +236,8 @@ export function expectedIncomeForMonth(
   return pending + fromActiveClients;
 }
 
-export function expectedExpenseForMonth(
+/** Projeção futura: pendentes + recorrências ainda não lançadas no extrato. */
+export function projectedExpenseForMonth(
   clients: Client[],
   employees: Employee[],
   subscriptions: Subscription[],
@@ -277,18 +299,8 @@ export function computeMonthlyForecastMetrics(params: {
   const referenceMonthKey = getReferenceMonthKey(range, ref);
   const referenceMonthLabel = formatMonthKeyLabel(referenceMonthKey);
 
-  const expectedIncomeTotal = expectedIncomeForMonth(
-    clients,
-    transactions,
-    referenceMonthKey,
-  );
-  const expectedExpenseTotal = expectedExpenseForMonth(
-    clients,
-    employees,
-    subscriptions,
-    transactions,
-    referenceMonthKey,
-  );
+  const expectedIncomeTotal = totalIncomeInMonth(transactions, referenceMonthKey);
+  const expectedExpenseTotal = totalExpenseInMonth(transactions, referenceMonthKey);
   const { fixed: fixedCostMonth, variable: variableCostMonth } = costsInReferenceMonth(
     transactions,
     referenceMonthKey,
@@ -298,8 +310,8 @@ export function computeMonthlyForecastMetrics(params: {
   let projectedExpenseTotal = 0;
   for (let i = 1; i <= projectionMonths; i++) {
     const mk = shiftMonthKey(referenceMonthKey, i);
-    projectedIncomeTotal += expectedIncomeForMonth(clients, transactions, mk);
-    projectedExpenseTotal += expectedExpenseForMonth(
+    projectedIncomeTotal += projectedIncomeForMonth(clients, transactions, mk);
+    projectedExpenseTotal += projectedExpenseForMonth(
       clients,
       employees,
       subscriptions,

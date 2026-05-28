@@ -17,7 +17,8 @@ import {
   computePayrollMonthStatus,
   computeSubscriptionsMonthStatus,
   computeMonthlyForecastMetrics,
-  expectedIncomeForMonth,
+  totalIncomeInMonth,
+  projectedIncomeForMonth,
   costsInReferenceMonth,
 } from './dashboardMetrics';
 import { salaryDescriptionForEmployee, subscriptionDescriptionFor } from './recurringLogic';
@@ -246,39 +247,34 @@ describe('dashboardMetrics', () => {
     expect(summary.entries.find((e) => e.employee.name === 'Bruno')?.status).toBe('pending');
   });
 
-  it('calcula entrada prevista com pendente e cliente sem lançamento', () => {
-    const clients = [
-      {
-        id: 'c1',
-        name: 'Empresa A',
-        cnpj: '',
-        contactPerson: 'A',
-        email: '',
-        phone: '',
-        activePlan: 'Plano',
-        monthlyFee: 2000,
-        dueDay: 10,
-        contractStatus: 'Ativo' as const,
-      },
-    ];
+  it('entrada prevista total soma pagas e pendentes do mês', () => {
     const monthKey = '2026-05';
-    const total = expectedIncomeForMonth(
-      clients,
+    const total = totalIncomeInMonth(
       [
         {
           id: 't1',
-          description: 'Outra entrada',
-          amount: 500,
+          description: 'Entrada paga',
+          amount: 800,
           type: TransactionType.INCOME,
           category: Category.CLIENT_PAYMENT,
           date: '2026-05-05',
+          status: TransactionStatus.PAID,
+          paymentMethod: 'PIX',
+        },
+        {
+          id: 't2',
+          description: 'Entrada pendente',
+          amount: 500,
+          type: TransactionType.INCOME,
+          category: Category.CLIENT_PAYMENT,
+          date: '2026-05-12',
           status: TransactionStatus.PENDING,
           paymentMethod: 'PIX',
         },
       ],
       monthKey,
     );
-    expect(total).toBe(2500);
+    expect(total).toBe(1300);
   });
 
   it('separa custo fixo e variável no mês', () => {
@@ -311,7 +307,7 @@ describe('dashboardMetrics', () => {
     expect(variable).toBe(800);
   });
 
-  it('computeMonthlyForecastMetrics projeta próximos meses', () => {
+  it('computeMonthlyForecastMetrics usa totais no mês e projeção nos próximos', () => {
     const clients = [
       {
         id: 'c1',
@@ -331,14 +327,28 @@ describe('dashboardMetrics', () => {
       clients,
       employees: [],
       subscriptions: [],
-      transactions: [],
+      transactions: [
+        {
+          id: 't1',
+          description: 'Recebido',
+          amount: 600,
+          type: TransactionType.INCOME,
+          category: Category.CLIENT_PAYMENT,
+          date: '2026-05-03',
+          status: TransactionStatus.PAID,
+          paymentMethod: 'PIX',
+        },
+      ],
       range,
       projectionMonths: 2,
       ref: new Date('2026-05-15'),
     });
-    expect(f.expectedIncomeTotal).toBe(1000);
+    expect(f.expectedIncomeTotal).toBe(600);
     expect(f.projectedIncomeTotal).toBe(2000);
     expect(f.projectionMonthCount).toBe(2);
+    expect(
+      projectedIncomeForMonth(clients, [], '2026-06'),
+    ).toBe(1000);
   });
 
   it('classifica assinaturas de apps pagas e pendentes no mês', () => {
