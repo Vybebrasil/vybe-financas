@@ -1,241 +1,374 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Transaction, ChartPeriod } from '../types';
-import { getChartData, formatCurrency } from '../utils';
-import { Calendar, Clock, Layers, PieChart, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+  Category,
+  Transaction,
+  TransactionStatus,
+  TransactionType,
+} from '../types';
+import { formatCurrency } from '../utils';
+import { LineChart } from 'lucide-react';
+
 interface FinancialChartProps {
   transactions: Transaction[];
-  /** Sincroniza o ano exibido no gráfico mensal (ex.: filtro do dashboard). */
-  initialYear?: number;
 }
 
-const FinancialChart: React.FC<FinancialChartProps> = ({
-  transactions,
-  initialYear,
-}) => {
-  const currentYear = new Date().getFullYear();
-  const [period, setPeriod] = useState<ChartPeriod>('monthly');
-  const [selectedYear, setSelectedYear] = useState<number>(initialYear ?? currentYear);
+type RangeOption = '6m' | '12m' | '24m' | '36m' | 'all';
 
-  useEffect(() => {
-    if (initialYear != null) setSelectedYear(initialYear);
-  }, [initialYear]);
+type MonthlyPoint = {
+  key: string;
+  label: string;
+  income: number;
+  expenseTotal: number;
+  expenseFixed: number;
+  expenseVariable: number;
+  incomeProj: number;
+  expenseTotalProj: number;
+  expenseFixedProj: number;
+  expenseVariableProj: number;
+  cashTotal: number;
+};
 
-  const data = useMemo(() => getChartData(transactions, period, selectedYear), [transactions, period, selectedYear]);
+const RANGE_OPTIONS: Array<{ id: RangeOption; label: string }> = [
+  { id: '6m', label: '6 meses' },
+  { id: '12m', label: '12 meses' },
+  { id: '24m', label: '24 meses' },
+  { id: '36m', label: '36 meses' },
+  { id: 'all', label: 'Todo histórico' },
+];
 
-  const maxValue = Math.max(
-    ...data.map((d) =>
-      Math.max(d.income, d.expense, d.pendingIncome, d.pendingExpense)
-    ),
-    1
-  );
-  const minValue = 0;
-  const valueRange = Math.max(1, maxValue - minValue);
-  const chartHeight = 220;
-  const chartWidth = Math.max(320, data.length * 72);
+const isFixedCost = (category: string): boolean =>
+  category === Category.SALARY ||
+  category === Category.FIXED_EXPENSE ||
+  category === Category.TOOLS;
+
+const isVariableCost = (category: string): boolean =>
+  category === Category.ADS ||
+  category === Category.SUPPLIES ||
+  category === Category.VARIABLE_EXPENSE ||
+  category === Category.OTHER;
+
+const formatMonthLabel = (monthKey: string): string => {
+  const [y, m] = monthKey.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', {
+    month: 'short',
+    year: '2-digit',
+  });
+};
+
+const getMonthStart = (date: Date): Date =>
+  new Date(date.getFullYear(), date.getMonth(), 1);
+
+const addMonths = (date: Date, delta: number): Date =>
+  new Date(date.getFullYear(), date.getMonth() + delta, 1);
+
+const monthKeyFromDate = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
+  const [selectedRange, setSelectedRange] = useState<RangeOption>('24m');
+
+  const data = useMemo(() => {
+    if (transactions.length === 0) return [] as MonthlyPoint[];
+
+    const txDates = transactions
+      .map((t) => new Date(`${t.date.split('T')[0]}T12:00:00`))
+      .filter((d) => !Number.isNaN(d.getTime()));
+
+    if (txDates.length === 0) return [] as MonthlyPoint[];
+
+    const minDate = getMonthStart(
+      txDates.reduce((a, b) => (a < b ? a : b)),
+    );
+    const maxDate = getMonthStart(
+      txDates.reduce((a, b) => (a > b ? a : b)),
+    );
+
+    const months: string[] = [];
+    let cursor = minDate;
+    while (cursor <= maxDate) {
+      months.push(monthKeyFromDate(cursor));
+      cursor = addMonths(cursor, 1);
+    }
+
+    const monthMap = new Map<string, MonthlyPoint>();
+    months.forEach((key) => {
+      monthMap.set(key, {
+        key,
+        label: formatMonthLabel(key),
+        income: 0,
+        expenseTotal: 0,
+        expenseFixed: 0,
+        expenseVariable: 0,
+        incomeProj: 0,
+        expenseTotalProj: 0,
+        expenseFixedProj: 0,
+        expenseVariableProj: 0,
+        cashTotal: 0,
+      });
+    });
+
+    transactions.forEach((t) => {
+      const key = t.date.split('T')[0].slice(0, 7);
+      const point = monthMap.get(key);
+      if (!point) return;
+
+      const isPaid = t.status === TransactionStatus.PAID;
+      const amount = Number(t.amount) || 0;
+
+      if (t.type === TransactionType.INCOME) {
+        if (isPaid) point.income += amount;
+        point.incomeProj += amount;
+        return;
+      }
+
+      if (t.type === TransactionType.EXPENSE) {
+        if (isPaid) point.expenseTotal += amount;
+        point.expenseTotalProj += amount;
+
+        const fixed = isFixedCost(t.category);
+        const variable = isVariableCost(t.category);
+
+        if (fixed) {
+          if (isPaid) point.expenseFixed += amount;
+          point.expenseFixedProj += amount;
+        } else if (variable) {
+          if (isPaid) point.expenseVariable += amount;
+          point.expenseVariableProj += amount;
+        } else {
+          if (isPaid) point.expenseVariable += amount;
+          point.expenseVariableProj += amount;
+        }
+      }
+    });
+
+    const ordered = [...monthMap.values()].sort((a, b) =>
+      a.key.localeCompare(b.key),
+    );
+
+    let runningCash = 0;
+    ordered.forEach((p) => {
+      runningCash += p.income - p.expenseTotal;
+      p.cashTotal = runningCash;
+    });
+
+    if (selectedRange === 'all') return ordered;
+
+    const keep = parseInt(selectedRange.replace('m', ''), 10);
+    return ordered.slice(-keep);
+  }, [transactions, selectedRange]);
+
+  const chartWidth = Math.max(760, data.length * 54);
+  const chartHeight = 300;
   const xStep = data.length > 1 ? chartWidth / (data.length - 1) : chartWidth;
-  const yForValue = (value: number) =>
-    chartHeight - ((value - minValue) / valueRange) * chartHeight;
 
-  const series = useMemo(
-    () => [
-      { key: 'income', color: '#10B981', values: data.map((d) => d.income) },
-      { key: 'expense', color: '#EF4444', values: data.map((d) => d.expense) },
-      { key: 'pendingIncome', color: '#FBBF24', values: data.map((d) => d.pendingIncome) },
-      { key: 'pendingExpense', color: '#D97706', values: data.map((d) => d.pendingExpense) },
-    ],
-    [data],
-  );
+  const allValues = data.flatMap((d) => [
+    d.income,
+    d.expenseTotal,
+    d.expenseFixed,
+    d.expenseVariable,
+    d.incomeProj,
+    d.expenseTotalProj,
+    d.expenseFixedProj,
+    d.expenseVariableProj,
+    d.cashTotal,
+  ]);
 
-  const tabs: { id: ChartPeriod; label: string; icon: React.ReactNode }[] = [
-    { id: 'daily', label: 'Diário', icon: <Clock size={14} /> },
-    { id: 'monthly', label: 'Mensal', icon: <Calendar size={14} /> },
-    { id: 'yearly', label: 'Anual', icon: <Layers size={14} /> },
-    { id: 'total', label: 'Total', icon: <PieChart size={14} /> },
+  const minY = Math.min(0, ...allValues, 0);
+  const maxY = Math.max(1, ...allValues, 1);
+  const yRange = Math.max(1, maxY - minY);
+  const yFor = (value: number) => chartHeight - ((value - minY) / yRange) * chartHeight;
+
+  const buildPoints = (values: number[]) =>
+    values.map((v, i) => `${i * xStep},${yFor(v)}`).join(' ');
+
+  const series = [
+    {
+      key: 'income',
+      label: 'Receitas',
+      color: '#22C55E',
+      values: data.map((d) => d.income),
+      dashed: false,
+    },
+    {
+      key: 'expenseTotal',
+      label: 'Desp. Total',
+      color: '#F43F5E',
+      values: data.map((d) => d.expenseTotal),
+      dashed: false,
+    },
+    {
+      key: 'expenseFixed',
+      label: 'Desp. Fixas',
+      color: '#FB7185',
+      values: data.map((d) => d.expenseFixed),
+      dashed: true,
+    },
+    {
+      key: 'expenseVariable',
+      label: 'Desp. Variáveis',
+      color: '#F59E0B',
+      values: data.map((d) => d.expenseVariable),
+      dashed: true,
+    },
+    {
+      key: 'cashTotal',
+      label: 'Caixa Total',
+      color: '#38BDF8',
+      values: data.map((d) => d.cashTotal),
+      dashed: false,
+    },
+    {
+      key: 'incomeProj',
+      label: 'Receitas (Proj.)',
+      color: '#4ADE80',
+      values: data.map((d) => d.incomeProj),
+      dashed: true,
+    },
+    {
+      key: 'expenseTotalProj',
+      label: 'Desp. Total (Proj.)',
+      color: '#FB7185',
+      values: data.map((d) => d.expenseTotalProj),
+      dashed: true,
+    },
+    {
+      key: 'expenseFixedProj',
+      label: 'Desp. Fixas (Proj.)',
+      color: '#FDA4AF',
+      values: data.map((d) => d.expenseFixedProj),
+      dashed: true,
+    },
+    {
+      key: 'expenseVariableProj',
+      label: 'Desp. Variáveis (Proj.)',
+      color: '#FCD34D',
+      values: data.map((d) => d.expenseVariableProj),
+      dashed: true,
+    },
   ];
 
-  const { minYear, maxYear } = useMemo(() => {
-    const fromTx = transactions
-      .map((t) => parseInt(t.date.split('T')[0].slice(0, 4), 10))
-      .filter((y) => !Number.isNaN(y));
-    const dataMin = fromTx.length > 0 ? Math.min(...fromTx) : currentYear;
-    const dataMax = fromTx.length > 0 ? Math.max(...fromTx) : currentYear;
-    return {
-      minYear: Math.min(currentYear - 10, dataMin),
-      maxYear: Math.max(currentYear + 2, dataMax),
-    };
-  }, [transactions, currentYear]);
-
   return (
-    <div className="bg-vybe-card p-6 rounded-xl shadow-lg border border-gray-800 mb-8 flex flex-col">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <span className="w-1 h-6 bg-vybe-accent rounded-full"></span>
-          Fluxo de Caixa
-        </h2>
-
-        {/* Filter Tabs */}
-        <div className="flex bg-[#121212] p-1 rounded-lg border border-gray-700 overflow-x-auto max-w-full">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setPeriod(tab.id)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all whitespace-nowrap ${
-                period === tab.id
-                  ? 'bg-gray-700 text-white shadow-sm'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
+    <section className="bg-vybe-card p-5 rounded-xl shadow-lg border border-gray-800">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
+        <div>
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <LineChart size={18} className="text-vybe-accent" />
+            Receitas vs. Despesas por Mês
+          </h2>
+          <p className="text-xs text-gray-500">Valores em R$</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-400">Período:</label>
+          <select
+            value={selectedRange}
+            onChange={(e) => setSelectedRange(e.target.value as RangeOption)}
+            className="bg-[#121212] border border-gray-700 rounded-md px-2 py-1.5 text-xs text-white outline-none focus:border-vybe-accent"
+          >
+            {RANGE_OPTIONS.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-xs font-medium mb-4">
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-md bg-vybe-green shadow-[0_0_8px_rgba(16,185,129,0.4)]"></span>
-          <span className="text-gray-400">Entradas (pagas)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-md bg-vybe-red shadow-[0_0_8px_rgba(239,68,68,0.4)]"></span>
-          <span className="text-gray-400">Saídas (pagas)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-md bg-amber-400/90 border border-amber-300/50"></span>
-          <span className="text-gray-400 flex items-center gap-1">
-            <Clock size={12} className="text-amber-400" />
-            Entrada pendente
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-md bg-amber-600/90 border border-amber-500/50"></span>
-          <span className="text-gray-400 flex items-center gap-1">
-            <Clock size={12} className="text-amber-500" />
-            Saída pendente
-          </span>
-        </div>
-      </div>
-
-      {/* Chart Container */}
-      <div className="relative w-full mb-6">
-        {data.length === 0 ? (
-          <div className="h-64 w-full flex items-center justify-center text-gray-500 text-sm">
-            Sem dados para este período
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-4">
+        {series.map((s) => (
+          <div key={s.key} className="flex items-center gap-1.5 text-[11px] text-gray-400">
+            <span
+              className="inline-block w-7 h-0.5"
+              style={{
+                backgroundColor: s.color,
+                borderTop: s.dashed ? `2px dashed ${s.color}` : `2px solid ${s.color}`,
+              }}
+            />
+            <span>{s.label}</span>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
+        ))}
+      </div>
+
+      {data.length === 0 ? (
+        <div className="h-72 flex items-center justify-center text-sm text-gray-500">
+          Sem dados para o período selecionado.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <div style={{ minWidth: `${chartWidth + 20}px` }}>
+            <svg
+              width={chartWidth}
+              height={chartHeight + 24}
+              className="block"
+              role="img"
+              aria-label="Gráfico de linhas de fluxo de caixa"
+            >
+              {[...Array(6)].map((_, i) => {
+                const y = (chartHeight / 5) * i;
+                return (
+                  <line
+                    key={`grid-${i}`}
+                    x1={0}
+                    x2={chartWidth}
+                    y1={y}
+                    y2={y}
+                    stroke="#2A2F3A"
+                    strokeWidth="1"
+                  />
+                );
+              })}
+
+              {series.map((s) => (
+                <g key={s.key}>
+                  <polyline
+                    fill="none"
+                    stroke={s.color}
+                    strokeWidth="2"
+                    strokeDasharray={s.dashed ? '5 4' : undefined}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    points={buildPoints(s.values)}
+                  />
+                  {s.values.map((v, i) => (
+                    <circle
+                      key={`${s.key}-${i}`}
+                      cx={i * xStep}
+                      cy={yFor(v)}
+                      r="2.5"
+                      fill={s.color}
+                    >
+                      <title>{`${s.label}: ${formatCurrency(v)}`}</title>
+                    </circle>
+                  ))}
+                </g>
+              ))}
+
+              <line
+                x1={0}
+                x2={chartWidth}
+                y1={yFor(0)}
+                y2={yFor(0)}
+                stroke="#4B5563"
+                strokeWidth="1"
+              />
+            </svg>
             <div
-              className="relative"
-              style={{ minWidth: `${chartWidth + 16}px` }}
+              className="mt-1 grid"
+              style={{ gridTemplateColumns: `repeat(${data.length}, minmax(36px, 1fr))` }}
             >
-              <svg
-                width={chartWidth}
-                height={chartHeight}
-                className="block"
-                role="img"
-                aria-label="Gráfico de linha do fluxo de caixa"
-              >
-                {[...Array(5)].map((_, i) => {
-                  const y = (chartHeight / 4) * i;
-                  return (
-                    <line
-                      key={`grid-${i}`}
-                      x1={0}
-                      x2={chartWidth}
-                      y1={y}
-                      y2={y}
-                      stroke="#2b2b2b"
-                      strokeWidth="1"
-                    />
-                  );
-                })}
-
-                {series.map((s) => {
-                  const points = s.values
-                    .map((value, idx) => `${idx * xStep},${yForValue(value)}`)
-                    .join(' ');
-                  return (
-                    <g key={s.key}>
-                      <polyline
-                        fill="none"
-                        stroke={s.color}
-                        strokeWidth="2.5"
-                        points={points}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      {s.values.map((value, idx) => (
-                        <circle
-                          key={`${s.key}-${idx}`}
-                          cx={idx * xStep}
-                          cy={yForValue(value)}
-                          r="3"
-                          fill={s.color}
-                        >
-                          <title>{formatCurrency(value)}</title>
-                        </circle>
-                      ))}
-                    </g>
-                  );
-                })}
-              </svg>
-
-              <div className="mt-3 grid" style={{ gridTemplateColumns: `repeat(${data.length}, minmax(40px, 1fr))` }}>
-                {data.map((item) => (
-                  <span
-                    key={item.key}
-                    className="text-[10px] md:text-xs text-gray-500 font-medium uppercase tracking-wider truncate text-center"
-                    title={item.label}
-                  >
-                    {item.label}
-                  </span>
-                ))}
-              </div>
+              {data.map((d) => (
+                <span
+                  key={d.key}
+                  className="text-[10px] text-gray-500 text-center uppercase truncate"
+                  title={d.label}
+                >
+                  {d.label}
+                </span>
+              ))}
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Year Slider (Only visible for Monthly view usually, but functional for context) */}
-      {period === 'monthly' && (
-        <div className="mt-auto border-t border-gray-800 pt-6 px-4">
-          <div className="flex flex-col items-center">
-             <div className="flex justify-between w-full text-xs text-gray-500 mb-2 font-medium">
-                <span>{minYear}</span>
-                <span className="text-vybe-accent font-bold text-lg">{selectedYear}</span>
-                <span>{maxYear}</span>
-             </div>
-             
-             <div className="relative w-full flex items-center group">
-               <button 
-                  onClick={() => setSelectedYear(prev => Math.max(minYear, prev - 1))}
-                  className="p-1 text-gray-500 hover:text-white transition-colors"
-                >
-                  <ChevronLeft size={20} />
-               </button>
-
-               <input 
-                  type="range" 
-                  min={minYear} 
-                  max={maxYear} 
-                  value={selectedYear} 
-                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  className="w-full h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-vybe-accent hover:accent-orange-500 mx-4"
-               />
-
-               <button 
-                  onClick={() => setSelectedYear(prev => Math.min(maxYear, prev + 1))}
-                  className="p-1 text-gray-500 hover:text-white transition-colors"
-                >
-                  <ChevronRight size={20} />
-               </button>
-             </div>
-             <p className="text-[10px] text-gray-600 mt-2">Arraste para navegar entre os anos (10 anos passados / 10 anos futuros)</p>
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 };
 
