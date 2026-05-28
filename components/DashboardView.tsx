@@ -15,6 +15,11 @@ import {
   Calendar,
   PieChart,
   BarChart3,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Lock,
+  Shuffle,
+  CalendarRange,
 } from 'lucide-react';
 import { useAppData } from '../src/context/AppDataContext';
 import { formatCurrency, formatDate } from '../utils';
@@ -27,20 +32,21 @@ import {
   computeFixedCosts,
   computeMrrVsReceived,
   computeExpensesByCategory,
-  filterTransactionsByRange,
   getClientsDueSoon,
   getDelinquencySnapshot,
   getPendingToReconcile,
   getPeriodRange,
+  getTransactionYears,
   computePayrollMonthStatus,
   computeSubscriptionsMonthStatus,
+  computeMonthlyForecastMetrics,
 } from '../src/services/dashboardMetrics';
 import PayrollStatusSection from './PayrollStatusSection';
 import SubscriptionsStatusSection from './SubscriptionsStatusSection';
 const PERIOD_OPTIONS: { id: DashboardPeriodPreset; label: string }[] = [
   { id: 'this_month', label: 'Este mês' },
   { id: 'last_month', label: 'Mês anterior' },
-  { id: 'this_year', label: 'Este ano' },
+  { id: 'calendar_year', label: 'Por ano' },
 ];
 
 const DashboardView: React.FC = () => {
@@ -56,8 +62,16 @@ const DashboardView: React.FC = () => {
   } = useAppData();
 
   const [period, setPeriod] = useState<DashboardPeriodPreset>('this_month');
+  const availableYears = useMemo(
+    () => getTransactionYears(transactions),
+    [transactions],
+  );
+  const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
 
-  const range = useMemo(() => getPeriodRange(period), [period]);
+  const range = useMemo(
+    () => getPeriodRange(period, new Date(), calendarYear),
+    [period, calendarYear],
+  );
 
   const comparison = useMemo(
     () => computePeriodComparison(transactions, range),
@@ -80,11 +94,6 @@ const DashboardView: React.FC = () => {
     [transactions, range],
   );
 
-  const filteredTransactions = useMemo(
-    () => filterTransactionsByRange(transactions, range.startDate, range.endDate),
-    [transactions, range],
-  );
-
   const dueSoon = useMemo(() => getClientsDueSoon(clients), [clients]);
   const pendingList = useMemo(() => getPendingToReconcile(transactions), [transactions]);
   const delinquency = useMemo(
@@ -100,6 +109,18 @@ const DashboardView: React.FC = () => {
   const subscriptionsStatus = useMemo(
     () => computeSubscriptionsMonthStatus(subscriptions, transactions, range),
     [subscriptions, transactions, range],
+  );
+
+  const forecast = useMemo(
+    () =>
+      computeMonthlyForecastMetrics({
+        clients,
+        employees,
+        subscriptions,
+        transactions,
+        range,
+      }),
+    [clients, employees, subscriptions, transactions, range],
   );
 
   const topDelinquent = useMemo(() => {
@@ -119,21 +140,37 @@ const DashboardView: React.FC = () => {
           </h2>
           <p className="text-sm text-gray-500 mt-1 capitalize">{range.label}</p>
         </div>
-        <div className="flex bg-[#1E1E1E] p-1 rounded-lg border border-gray-800">
-          {PERIOD_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => setPeriod(opt.id)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                period === opt.id
-                  ? 'bg-vybe-accent text-white'
-                  : 'text-gray-400 hover:text-white'
-              }`}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex bg-[#1E1E1E] p-1 rounded-lg border border-gray-800">
+            {PERIOD_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setPeriod(opt.id)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  period === opt.id
+                    ? 'bg-vybe-accent text-white'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {period === 'calendar_year' && (
+            <select
+              value={calendarYear}
+              onChange={(e) => setCalendarYear(parseInt(e.target.value, 10))}
+              className="bg-[#1E1E1E] border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-white focus:border-vybe-accent outline-none cursor-pointer"
+              aria-label="Selecionar ano"
             >
-              {opt.label}
-            </button>
-          ))}
+              {availableYears.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -208,6 +245,57 @@ const DashboardView: React.FC = () => {
         />
       </section>
 
+      <section>
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+          <CalendarRange size={16} className="text-vybe-accent" />
+          Previsão e custos — {forecast.referenceMonthLabel}
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <DashboardCard
+            title="Entrada prevista total"
+            subtitle="Pendentes + mensalidades ativas não lançadas"
+            value={forecast.expectedIncomeTotal}
+            type="income"
+            icon={<ArrowDownLeft size={20} />}
+          />
+          <DashboardCard
+            title="Saída prevista total"
+            subtitle="Pendentes + recorrências do mês (folha e apps)"
+            value={forecast.expectedExpenseTotal}
+            type="expense"
+            icon={<ArrowUpRight size={20} />}
+          />
+          <DashboardCard
+            title="Custo fixo"
+            subtitle="Salário, gastos fixos e ferramentas no mês"
+            value={forecast.fixedCostMonth}
+            type="expense"
+            icon={<Lock size={20} />}
+          />
+          <DashboardCard
+            title="Custo variável"
+            subtitle="Tráfego, variáveis e outros no mês"
+            value={forecast.variableCostMonth}
+            type="expense"
+            icon={<Shuffle size={20} />}
+          />
+          <DashboardCard
+            title="Projeção entrada"
+            subtitle={`Próximos ${forecast.projectionMonthCount} meses (MRR + pendentes)`}
+            value={forecast.projectedIncomeTotal}
+            type="income"
+            icon={<TrendingUp size={20} />}
+          />
+          <DashboardCard
+            title="Projeção saída"
+            subtitle={`Próximos ${forecast.projectionMonthCount} meses (recorrências + pendentes)`}
+            value={forecast.projectedExpenseTotal}
+            type="expense"
+            icon={<TrendingDown size={20} />}
+          />
+        </div>
+      </section>
+
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <PayrollStatusSection
           summary={payrollStatus}
@@ -221,7 +309,10 @@ const DashboardView: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <FinancialChart transactions={filteredTransactions} />
+          <FinancialChart
+            transactions={transactions}
+            initialYear={period === 'calendar_year' ? calendarYear : undefined}
+          />
 
           {expensesByCategory.length > 0 && (
             <section className="bg-vybe-card border border-gray-800 rounded-xl p-5">
@@ -344,7 +435,11 @@ const DashboardView: React.FC = () => {
               <Calendar size={16} className="text-vybe-accent" />
               MRR vs recebido
             </h3>
-            <p className="text-xs text-gray-500 mb-3">Mensalidades pagas no mês do período</p>
+            <p className="text-xs text-gray-500 mb-3">
+              {range.startDate.slice(0, 7) === range.endDate.slice(0, 7)
+                ? 'Mensalidades pagas no mês do período'
+                : 'Mensalidades pagas no período (esperado = MRR × meses)'}
+            </p>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-400">MRR esperado</span>

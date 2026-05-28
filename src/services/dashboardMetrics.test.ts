@@ -10,9 +10,15 @@ import {
   computePeriodKpis,
   filterTransactionsByRange,
   getPeriodRange,
+  getYearRange,
+  getTransactionYears,
   computePeriodComparison,
+  computeMrrVsReceived,
   computePayrollMonthStatus,
   computeSubscriptionsMonthStatus,
+  computeMonthlyForecastMetrics,
+  expectedIncomeForMonth,
+  costsInReferenceMonth,
 } from './dashboardMetrics';
 import { salaryDescriptionForEmployee, subscriptionDescriptionFor } from './recurringLogic';
 
@@ -76,6 +82,81 @@ describe('dashboardMetrics', () => {
     const range = getPeriodRange('this_month', new Date('2026-05-15'));
     expect(range.startDate).toBe('2026-05-01');
     expect(range.endDate).toBe('2026-05-31');
+  });
+
+  it('getPeriodRange calendar_year usa ano informado', () => {
+    const range = getPeriodRange('calendar_year', new Date('2026-05-15'), 2024);
+    expect(range.startDate).toBe('2024-01-01');
+    expect(range.endDate).toBe('2024-12-31');
+    expect(range.label).toBe('2024');
+  });
+
+  it('getTransactionYears inclui anos das transações', () => {
+    const years = getTransactionYears(
+      [
+        {
+          id: '1',
+          description: 'A',
+          amount: 1,
+          type: TransactionType.INCOME,
+          category: Category.CLIENT_PAYMENT,
+          date: '2023-06-01',
+          status: TransactionStatus.PAID,
+          paymentMethod: 'PIX',
+        },
+      ],
+      new Date('2026-05-15'),
+    );
+    expect(years).toContain(2023);
+    expect(years).toContain(2026);
+  });
+
+  it('MRR vs recebido soma o ano inteiro quando período é anual', () => {
+    const clients = [
+      {
+        id: 'c1',
+        name: 'Cliente',
+        cnpj: '',
+        contactPerson: 'A',
+        email: '',
+        phone: '',
+        activePlan: 'Plano',
+        monthlyFee: 1000,
+        dueDay: 10,
+        contractStatus: 'Ativo' as const,
+      },
+    ];
+    const range = getYearRange(2024);
+    const mrr = computeMrrVsReceived(
+      clients,
+      [
+        {
+          id: '1',
+          description: 'Mensalidade - Cliente',
+          amount: 1000,
+          type: TransactionType.INCOME,
+          category: Category.CLIENT_PAYMENT,
+          date: '2024-03-01',
+          status: TransactionStatus.PAID,
+          paymentMethod: 'PIX',
+          clientId: 'c1',
+        },
+        {
+          id: '2',
+          description: 'Mensalidade - Cliente',
+          amount: 1000,
+          type: TransactionType.INCOME,
+          category: Category.CLIENT_PAYMENT,
+          date: '2024-08-01',
+          status: TransactionStatus.PAID,
+          paymentMethod: 'PIX',
+          clientId: 'c1',
+        },
+      ],
+      range,
+    );
+    expect(mrr.receivedPaid).toBe(2000);
+    expect(mrr.expectedMrr).toBe(12000);
   });
 
   it('compara com período anterior', () => {
@@ -163,6 +244,101 @@ describe('dashboardMetrics', () => {
     expect(summary.totalPending).toBe(5000);
     expect(summary.entries.find((e) => e.employee.name === 'Ana')?.status).toBe('paid');
     expect(summary.entries.find((e) => e.employee.name === 'Bruno')?.status).toBe('pending');
+  });
+
+  it('calcula entrada prevista com pendente e cliente sem lançamento', () => {
+    const clients = [
+      {
+        id: 'c1',
+        name: 'Empresa A',
+        cnpj: '',
+        contactPerson: 'A',
+        email: '',
+        phone: '',
+        activePlan: 'Plano',
+        monthlyFee: 2000,
+        dueDay: 10,
+        contractStatus: 'Ativo' as const,
+      },
+    ];
+    const monthKey = '2026-05';
+    const total = expectedIncomeForMonth(
+      clients,
+      [
+        {
+          id: 't1',
+          description: 'Outra entrada',
+          amount: 500,
+          type: TransactionType.INCOME,
+          category: Category.CLIENT_PAYMENT,
+          date: '2026-05-05',
+          status: TransactionStatus.PENDING,
+          paymentMethod: 'PIX',
+        },
+      ],
+      monthKey,
+    );
+    expect(total).toBe(2500);
+  });
+
+  it('separa custo fixo e variável no mês', () => {
+    const { fixed, variable } = costsInReferenceMonth(
+      [
+        {
+          id: '1',
+          description: 'Sal',
+          amount: 3000,
+          type: TransactionType.EXPENSE,
+          category: Category.SALARY,
+          date: '2026-05-05',
+          status: TransactionStatus.PAID,
+          paymentMethod: 'PIX',
+        },
+        {
+          id: '2',
+          description: 'Ads',
+          amount: 800,
+          type: TransactionType.EXPENSE,
+          category: Category.ADS,
+          date: '2026-05-10',
+          status: TransactionStatus.PENDING,
+          paymentMethod: 'PIX',
+        },
+      ],
+      '2026-05',
+    );
+    expect(fixed).toBe(3000);
+    expect(variable).toBe(800);
+  });
+
+  it('computeMonthlyForecastMetrics projeta próximos meses', () => {
+    const clients = [
+      {
+        id: 'c1',
+        name: 'Cliente',
+        cnpj: '',
+        contactPerson: 'A',
+        email: '',
+        phone: '',
+        activePlan: 'P',
+        monthlyFee: 1000,
+        dueDay: 5,
+        contractStatus: 'Ativo' as const,
+      },
+    ];
+    const range = getPeriodRange('this_month', new Date('2026-05-15'));
+    const f = computeMonthlyForecastMetrics({
+      clients,
+      employees: [],
+      subscriptions: [],
+      transactions: [],
+      range,
+      projectionMonths: 2,
+      ref: new Date('2026-05-15'),
+    });
+    expect(f.expectedIncomeTotal).toBe(1000);
+    expect(f.projectedIncomeTotal).toBe(2000);
+    expect(f.projectionMonthCount).toBe(2);
   });
 
   it('classifica assinaturas de apps pagas e pendentes no mês', () => {

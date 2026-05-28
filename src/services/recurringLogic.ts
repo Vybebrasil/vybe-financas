@@ -20,6 +20,12 @@ export const getCurrentMonthKey = (date = new Date()): string => {
   return `${y}-${m}`;
 };
 
+export const shiftMonthKey = (monthKey: string, delta: number): string => {
+  const [y, m] = monthKey.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
 export const dateInMonth = (monthKey: string, day: number): string => {
   const [y, m] = monthKey.split('-').map(Number);
   const lastDay = new Date(y, m, 0).getDate();

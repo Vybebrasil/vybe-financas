@@ -1,15 +1,24 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Transaction, ChartPeriod } from '../types';
 import { getChartData, formatCurrency } from '../utils';
 import { Calendar, Clock, Layers, PieChart, ChevronLeft, ChevronRight } from 'lucide-react';
 interface FinancialChartProps {
   transactions: Transaction[];
+  /** Sincroniza o ano exibido no gráfico mensal (ex.: filtro do dashboard). */
+  initialYear?: number;
 }
 
-const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
+const FinancialChart: React.FC<FinancialChartProps> = ({
+  transactions,
+  initialYear,
+}) => {
   const currentYear = new Date().getFullYear();
   const [period, setPeriod] = useState<ChartPeriod>('monthly');
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+  const [selectedYear, setSelectedYear] = useState<number>(initialYear ?? currentYear);
+
+  useEffect(() => {
+    if (initialYear != null) setSelectedYear(initialYear);
+  }, [initialYear]);
 
   const data = useMemo(() => getChartData(transactions, period, selectedYear), [transactions, period, selectedYear]);
 
@@ -27,8 +36,17 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
     { id: 'total', label: 'Total', icon: <PieChart size={14} /> },
   ];
 
-  const minYear = currentYear - 10;
-  const maxYear = currentYear + 10;
+  const { minYear, maxYear } = useMemo(() => {
+    const fromTx = transactions
+      .map((t) => parseInt(t.date.split('T')[0].slice(0, 4), 10))
+      .filter((y) => !Number.isNaN(y));
+    const dataMin = fromTx.length > 0 ? Math.min(...fromTx) : currentYear;
+    const dataMax = fromTx.length > 0 ? Math.max(...fromTx) : currentYear;
+    return {
+      minYear: Math.min(currentYear - 10, dataMin),
+      maxYear: Math.max(currentYear + 2, dataMax),
+    };
+  }, [transactions, currentYear]);
 
   return (
     <div className="bg-vybe-card p-6 rounded-xl shadow-lg border border-gray-800 mb-8 flex flex-col">

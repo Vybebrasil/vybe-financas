@@ -12,11 +12,13 @@ import { computeDashboardSummary } from './summary';
 import { getDelinquencyReport } from './delinquency';
 import { isClientPaymentCategory } from './categories';
 import {
+  buildMonthlyRecurringPayloads,
   getCurrentMonthKey,
+  shiftMonthKey,
   subscriptionDescriptionFor,
 } from './recurringLogic';
 
-export type DashboardPeriodPreset = 'this_month' | 'last_month' | 'this_year';
+export type DashboardPeriodPreset = 'this_month' | 'last_month' | 'calendar_year';
 
 export interface DateRange {
   startDate: string;
@@ -71,7 +73,19 @@ const isoDate = (y: number, m: number, d: number) =>
 
 const lastDayOfMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
 
-export function getPeriodRange(preset: DashboardPeriodPreset, ref = new Date()): DateRange {
+export function getYearRange(year: number): DateRange {
+  return {
+    startDate: isoDate(year, 1, 1),
+    endDate: isoDate(year, 12, 31),
+    label: String(year),
+  };
+}
+
+export function getPeriodRange(
+  preset: DashboardPeriodPreset,
+  ref = new Date(),
+  calendarYear?: number,
+): DateRange {
   const y = ref.getFullYear();
   const m = ref.getMonth() + 1;
 
@@ -94,10 +108,216 @@ export function getPeriodRange(preset: DashboardPeriodPreset, ref = new Date()):
     };
   }
 
+  return getYearRange(calendarYear ?? y);
+}
+
+/** Anos com lançamentos + ano atual, do mais recente ao mais antigo. */
+export function getTransactionYears(transactions: Transaction[], ref = new Date()): number[] {
+  const years = new Set<number>([ref.getFullYear()]);
+  for (const t of transactions) {
+    const y = parseInt(t.date.split('T')[0].slice(0, 4), 10);
+    if (!Number.isNaN(y)) years.add(y);
+  }
+  return [...years].sort((a, b) => b - a);
+}
+
+function monthsInRange(range: DateRange): number {
+  const [sy, sm] = range.startDate.split('-').map(Number);
+  const [ey, em] = range.endDate.split('-').map(Number);
+  return Math.max(1, (ey - sy) * 12 + (em - sm) + 1);
+}
+
+export function isSingleCalendarMonth(range: DateRange): boolean {
+  return range.startDate.slice(0, 7) === range.endDate.slice(0, 7);
+}
+
+export interface MonthlyForecastMetrics {
+  referenceMonthKey: string;
+  referenceMonthLabel: string;
+  expectedIncomeTotal: number;
+  expectedExpenseTotal: number;
+  fixedCostMonth: number;
+  variableCostMonth: number;
+  projectedIncomeTotal: number;
+  projectedExpenseTotal: number;
+  projectionMonthCount: number;
+}
+
+export function getReferenceMonthKey(range: DateRange, ref = new Date()): string {
+  if (isSingleCalendarMonth(range)) return range.startDate.slice(0, 7);
+  const nowKey = `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}`;
+  const year = range.startDate.slice(0, 4);
+  if (nowKey.startsWith(year)) return nowKey;
+  return range.endDate.slice(0, 7);
+}
+
+export function formatMonthKeyLabel(monthKey: string): string {
+  const [y, m] = monthKey.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+export function isFixedCostCategory(category: string): boolean {
+  return (
+    category === Category.SALARY ||
+    category === Category.FIXED_EXPENSE ||
+    category === Category.TOOLS
+  );
+}
+
+export function isVariableCostCategory(category: string): boolean {
+  return (
+    category === Category.VARIABLE_EXPENSE ||
+    category === Category.ADS ||
+    category === Category.SUPPLIES ||
+    category === Category.OTHER
+  );
+}
+
+function transactionsInMonth(transactions: Transaction[], monthKey: string): Transaction[] {
+  return transactions.filter((t) => t.date.split('T')[0].startsWith(monthKey));
+}
+
+function clientHasIncomeInMonth(
+  client: Client,
+  monthTxs: Transaction[],
+): boolean {
+  const description = `Mensalidade - ${client.name}`;
+  return monthTxs.some(
+    (t) =>
+      t.type === TransactionType.INCOME &&
+      (t.description === description || t.clientId === client.id),
+  );
+}
+
+export function expectedIncomeForMonth(
+  clients: Client[],
+  transactions: Transaction[],
+  monthKey: string,
+): number {
+  const monthTxs = transactionsInMonth(transactions, monthKey);
+  const pending = monthTxs
+    .filter(
+      (t) =>
+        t.type === TransactionType.INCOME && t.status === TransactionStatus.PENDING,
+    )
+    .reduce((s, t) => s + t.amount, 0);
+
+  let fromActiveClients = 0;
+  for (const client of clients) {
+    if (client.contractStatus !== 'Ativo') continue;
+    if (!clientHasIncomeInMonth(client, monthTxs)) {
+      fromActiveClients += Number(client.monthlyFee) || 0;
+    }
+  }
+  return pending + fromActiveClients;
+}
+
+export function expectedExpenseForMonth(
+  clients: Client[],
+  employees: Employee[],
+  subscriptions: Subscription[],
+  transactions: Transaction[],
+  monthKey: string,
+): number {
+  const monthTxs = transactionsInMonth(transactions, monthKey);
+  const pending = monthTxs
+    .filter(
+      (t) =>
+        t.type === TransactionType.EXPENSE && t.status === TransactionStatus.PENDING,
+    )
+    .reduce((s, t) => s + t.amount, 0);
+
+  const recurring = buildMonthlyRecurringPayloads(
+    { transactions, clients, employees, subscriptions },
+    monthKey,
+  );
+  const recurringTotal = recurring.reduce((s, t) => s + t.amount, 0);
+  return pending + recurringTotal;
+}
+
+export function costsInReferenceMonth(
+  transactions: Transaction[],
+  monthKey: string,
+): { fixed: number; variable: number } {
+  const expenses = transactionsInMonth(transactions, monthKey).filter(
+    (t) => t.type === TransactionType.EXPENSE,
+  );
+  let fixed = 0;
+  let variable = 0;
+  for (const t of expenses) {
+    if (isFixedCostCategory(t.category)) fixed += t.amount;
+    else if (isVariableCostCategory(t.category)) variable += t.amount;
+    else variable += t.amount;
+  }
+  return { fixed, variable };
+}
+
+export function computeMonthlyForecastMetrics(params: {
+  clients: Client[];
+  employees: Employee[];
+  subscriptions: Subscription[];
+  transactions: Transaction[];
+  range: DateRange;
+  projectionMonths?: number;
+  ref?: Date;
+}): MonthlyForecastMetrics {
+  const {
+    clients,
+    employees,
+    subscriptions,
+    transactions,
+    range,
+    projectionMonths = 3,
+    ref = new Date(),
+  } = params;
+
+  const referenceMonthKey = getReferenceMonthKey(range, ref);
+  const referenceMonthLabel = formatMonthKeyLabel(referenceMonthKey);
+
+  const expectedIncomeTotal = expectedIncomeForMonth(
+    clients,
+    transactions,
+    referenceMonthKey,
+  );
+  const expectedExpenseTotal = expectedExpenseForMonth(
+    clients,
+    employees,
+    subscriptions,
+    transactions,
+    referenceMonthKey,
+  );
+  const { fixed: fixedCostMonth, variable: variableCostMonth } = costsInReferenceMonth(
+    transactions,
+    referenceMonthKey,
+  );
+
+  let projectedIncomeTotal = 0;
+  let projectedExpenseTotal = 0;
+  for (let i = 1; i <= projectionMonths; i++) {
+    const mk = shiftMonthKey(referenceMonthKey, i);
+    projectedIncomeTotal += expectedIncomeForMonth(clients, transactions, mk);
+    projectedExpenseTotal += expectedExpenseForMonth(
+      clients,
+      employees,
+      subscriptions,
+      transactions,
+      mk,
+    );
+  }
+
   return {
-    startDate: isoDate(y, 1, 1),
-    endDate: isoDate(y, 12, 31),
-    label: String(y),
+    referenceMonthKey,
+    referenceMonthLabel,
+    expectedIncomeTotal,
+    expectedExpenseTotal,
+    fixedCostMonth,
+    variableCostMonth,
+    projectedIncomeTotal,
+    projectedExpenseTotal,
+    projectionMonthCount: projectionMonths,
   };
 }
 
@@ -197,21 +417,28 @@ export function computeMrrVsReceived(
   range: DateRange,
 ): MrrVsReceived {
   const portfolio = computeClientPortfolio(clients);
+  const singleMonth = isSingleCalendarMonth(range);
   const monthKey = range.startDate.slice(0, 7);
+
   const receivedPaid = transactions
-    .filter(
-      (t) =>
-        t.type === TransactionType.INCOME &&
-        t.status === TransactionStatus.PAID &&
-        isClientPaymentCategory(t.category) &&
-        t.date.startsWith(monthKey),
-    )
+    .filter((t) => {
+      if (t.type !== TransactionType.INCOME) return false;
+      if (t.status !== TransactionStatus.PAID) return false;
+      if (!isClientPaymentCategory(t.category)) return false;
+      const d = t.date.split('T')[0];
+      if (singleMonth) return d.startsWith(monthKey);
+      return d >= range.startDate && d <= range.endDate;
+    })
     .reduce((s, t) => s + t.amount, 0);
 
+  const expectedMrr = singleMonth
+    ? portfolio.mrr
+    : portfolio.mrr * monthsInRange(range);
+
   return {
-    expectedMrr: portfolio.mrr,
+    expectedMrr,
     receivedPaid,
-    gap: portfolio.mrr - receivedPaid,
+    gap: expectedMrr - receivedPaid,
   };
 }
 
