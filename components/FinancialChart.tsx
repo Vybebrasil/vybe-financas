@@ -1,52 +1,34 @@
 import React, { useMemo, useState } from 'react';
 import {
-  Category,
   Transaction,
   TransactionStatus,
   TransactionType,
 } from '../types';
 import { formatCurrency } from '../utils';
-import { getTransactionCashDate, getTransactionFilterDate } from '../src/services/transactionDates';
+import { getTransactionCashDate, getTransactionScheduledDate } from '../src/services/transactionDates';
 import { LineChart } from 'lucide-react';
 
 interface FinancialChartProps {
   transactions: Transaction[];
 }
 
-type RangeOption = '6m' | '12m' | '24m' | '36m' | 'all';
+type RangeOption = '6m' | '12m' | '24m';
 
 type MonthlyPoint = {
   key: string;
   label: string;
   income: number;
-  expenseTotal: number;
-  expenseFixed: number;
-  expenseVariable: number;
-  incomeProj: number;
-  expenseTotalProj: number;
-  expenseFixedProj: number;
-  expenseVariableProj: number;
-  cashTotal: number;
+  expense: number;
+  balance: number;
+  incomeWithPending: number;
+  expenseWithPending: number;
 };
 
 const RANGE_OPTIONS: Array<{ id: RangeOption; label: string }> = [
   { id: '6m', label: '6 meses' },
   { id: '12m', label: '12 meses' },
   { id: '24m', label: '24 meses' },
-  { id: '36m', label: '36 meses' },
-  { id: 'all', label: 'Todo histórico' },
 ];
-
-const isFixedCost = (category: string): boolean =>
-  category === Category.SALARY ||
-  category === Category.FIXED_EXPENSE ||
-  category === Category.TOOLS;
-
-const isVariableCost = (category: string): boolean =>
-  category === Category.ADS ||
-  category === Category.SUPPLIES ||
-  category === Category.VARIABLE_EXPENSE ||
-  category === Category.OTHER;
 
 const formatMonthLabel = (monthKey: string): string => {
   const [y, m] = monthKey.split('-').map(Number);
@@ -65,188 +47,168 @@ const addMonths = (date: Date, delta: number): Date =>
 const monthKeyFromDate = (date: Date): string =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
+function formatAxisValue(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1)}M`;
+  if (abs >= 10_000) return `R$ ${Math.round(value / 1_000)}k`;
+  if (abs >= 1_000) return `R$ ${(value / 1_000).toFixed(1)}k`;
+  return `R$ ${Math.round(value)}`;
+}
+
+function buildMonthRange(count: number): string[] {
+  const end = getMonthStart(new Date());
+  const start = addMonths(end, -(count - 1));
+  const keys: string[] = [];
+  let cursor = start;
+  while (cursor <= end) {
+    keys.push(monthKeyFromDate(cursor));
+    cursor = addMonths(cursor, 1);
+  }
+  return keys;
+}
+
 const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
-  const [selectedRange, setSelectedRange] = useState<RangeOption>('24m');
+  const [selectedRange, setSelectedRange] = useState<RangeOption>('12m');
+  const [includePending, setIncludePending] = useState(false);
 
   const data = useMemo(() => {
-    if (transactions.length === 0) return [] as MonthlyPoint[];
-
-    const txDates = transactions
-      .map((t) => new Date(`${getTransactionFilterDate(t)}T12:00:00`))
-      .filter((d) => !Number.isNaN(d.getTime()));
-
-    if (txDates.length === 0) return [] as MonthlyPoint[];
-
-    const minDate = getMonthStart(
-      txDates.reduce((a, b) => (a < b ? a : b)),
-    );
-    const maxDate = getMonthStart(
-      txDates.reduce((a, b) => (a > b ? a : b)),
-    );
-
-    const months: string[] = [];
-    let cursor = minDate;
-    while (cursor <= maxDate) {
-      months.push(monthKeyFromDate(cursor));
-      cursor = addMonths(cursor, 1);
-    }
+    const monthCount = parseInt(selectedRange.replace('m', ''), 10);
+    const monthKeys = buildMonthRange(monthCount);
 
     const monthMap = new Map<string, MonthlyPoint>();
-    months.forEach((key) => {
+    for (const key of monthKeys) {
       monthMap.set(key, {
         key,
         label: formatMonthLabel(key),
         income: 0,
-        expenseTotal: 0,
-        expenseFixed: 0,
-        expenseVariable: 0,
-        incomeProj: 0,
-        expenseTotalProj: 0,
-        expenseFixedProj: 0,
-        expenseVariableProj: 0,
-        cashTotal: 0,
+        expense: 0,
+        balance: 0,
+        incomeWithPending: 0,
+        expenseWithPending: 0,
       });
-    });
+    }
 
-    transactions.forEach((t) => {
-      const isPaid = t.status === TransactionStatus.PAID;
-      const key = (isPaid ? getTransactionCashDate(t) : t.date.split('T')[0]).slice(0, 7);
-      const point = monthMap.get(key);
-      if (!point) return;
-
+    for (const t of transactions) {
       const amount = Number(t.amount) || 0;
+      if (amount <= 0) continue;
+
+      const isPaid = t.status === TransactionStatus.PAID;
+      const monthKey = (
+        isPaid ? getTransactionCashDate(t) : getTransactionScheduledDate(t)
+      ).slice(0, 7);
+
+      const point = monthMap.get(monthKey);
+      if (!point) continue;
 
       if (t.type === TransactionType.INCOME) {
         if (isPaid) point.income += amount;
-        point.incomeProj += amount;
-        return;
+        else point.incomeWithPending += amount;
+      } else if (t.type === TransactionType.EXPENSE) {
+        if (isPaid) point.expense += amount;
+        else point.expenseWithPending += amount;
       }
+    }
 
-      if (t.type === TransactionType.EXPENSE) {
-        if (isPaid) point.expenseTotal += amount;
-        point.expenseTotalProj += amount;
-
-        const fixed = isFixedCost(t.category);
-        const variable = isVariableCost(t.category);
-
-        if (fixed) {
-          if (isPaid) point.expenseFixed += amount;
-          point.expenseFixedProj += amount;
-        } else if (variable) {
-          if (isPaid) point.expenseVariable += amount;
-          point.expenseVariableProj += amount;
-        } else {
-          if (isPaid) point.expenseVariable += amount;
-          point.expenseVariableProj += amount;
-        }
-      }
+    return monthKeys.map((key) => {
+      const p = monthMap.get(key)!;
+      p.balance = p.income - p.expense;
+      return p;
     });
-
-    const ordered = [...monthMap.values()].sort((a, b) =>
-      a.key.localeCompare(b.key),
-    );
-
-    let runningCash = 0;
-    ordered.forEach((p) => {
-      runningCash += p.income - p.expenseTotal;
-      p.cashTotal = runningCash;
-    });
-
-    if (selectedRange === 'all') return ordered;
-
-    const keep = parseInt(selectedRange.replace('m', ''), 10);
-    return ordered.slice(-keep);
   }, [transactions, selectedRange]);
 
-  const chartWidth = Math.max(760, data.length * 54);
-  const chartHeight = 300;
-  const xStep = data.length > 1 ? chartWidth / (data.length - 1) : chartWidth;
+  const marginLeft = 58;
+  const marginRight = 12;
+  const plotHeight = 260;
+  const plotWidth = Math.max(520, data.length * 48);
+  const chartWidth = plotWidth + marginLeft + marginRight;
+  const xStep = data.length > 1 ? plotWidth / (data.length - 1) : 0;
 
-  const allValues = data.flatMap((d) => [
-    d.income,
-    d.expenseTotal,
-    d.expenseFixed,
-    d.expenseVariable,
-    d.incomeProj,
-    d.expenseTotalProj,
-    d.expenseFixedProj,
-    d.expenseVariableProj,
-    d.cashTotal,
-  ]);
+  const yValues = data.flatMap((d) => {
+    const base = [d.income, d.expense, d.balance];
+    if (!includePending) return base;
+    return [
+      ...base,
+      d.income + d.incomeWithPending,
+      d.expense + d.expenseWithPending,
+    ];
+  });
 
-  const minY = Math.min(0, ...allValues, 0);
-  const maxY = Math.max(1, ...allValues, 1);
+  const minY = Math.min(0, ...yValues);
+  const maxY = Math.max(1, ...yValues);
   const yRange = Math.max(1, maxY - minY);
-  const yFor = (value: number) => chartHeight - ((value - minY) / yRange) * chartHeight;
+  const yFor = (value: number) => plotHeight - ((value - minY) / yRange) * plotHeight;
+
+  const yTicks = useMemo(() => {
+    const steps = 5;
+    return Array.from({ length: steps + 1 }, (_, i) => minY + (yRange * i) / steps);
+  }, [minY, yRange]);
 
   const buildPoints = (values: number[]) =>
-    values.map((v, i) => `${i * xStep},${yFor(v)}`).join(' ');
+    values
+      .map((v, i) => `${marginLeft + i * xStep},${yFor(v)}`)
+      .join(' ');
 
-  const series = [
-    {
-      key: 'income',
-      label: 'Receitas',
-      color: '#22C55E',
-      values: data.map((d) => d.income),
-      dashed: false,
-    },
-    {
-      key: 'expenseTotal',
-      label: 'Desp. Total',
-      color: '#F43F5E',
-      values: data.map((d) => d.expenseTotal),
-      dashed: false,
-    },
-    {
-      key: 'expenseFixed',
-      label: 'Desp. Fixas',
-      color: '#FB7185',
-      values: data.map((d) => d.expenseFixed),
-      dashed: true,
-    },
-    {
-      key: 'expenseVariable',
-      label: 'Desp. Variáveis',
-      color: '#F59E0B',
-      values: data.map((d) => d.expenseVariable),
-      dashed: true,
-    },
-    {
-      key: 'cashTotal',
-      label: 'Caixa Total',
-      color: '#38BDF8',
-      values: data.map((d) => d.cashTotal),
-      dashed: false,
-    },
-    {
-      key: 'incomeProj',
-      label: 'Receitas (Proj.)',
-      color: '#4ADE80',
-      values: data.map((d) => d.incomeProj),
-      dashed: true,
-    },
-    {
-      key: 'expenseTotalProj',
-      label: 'Desp. Total (Proj.)',
-      color: '#FB7185',
-      values: data.map((d) => d.expenseTotalProj),
-      dashed: true,
-    },
-    {
-      key: 'expenseFixedProj',
-      label: 'Desp. Fixas (Proj.)',
-      color: '#FDA4AF',
-      values: data.map((d) => d.expenseFixedProj),
-      dashed: true,
-    },
-    {
-      key: 'expenseVariableProj',
-      label: 'Desp. Variáveis (Proj.)',
-      color: '#FCD34D',
-      values: data.map((d) => d.expenseVariableProj),
-      dashed: true,
-    },
-  ];
+  const series = includePending
+    ? [
+        {
+          key: 'income',
+          label: 'Receitas (realizadas)',
+          color: '#22C55E',
+          values: data.map((d) => d.income),
+          dashed: false,
+        },
+        {
+          key: 'expense',
+          label: 'Despesas (realizadas)',
+          color: '#F43F5E',
+          values: data.map((d) => d.expense),
+          dashed: false,
+        },
+        {
+          key: 'incomeProj',
+          label: 'Receitas (+ pendentes)',
+          color: '#86EFAC',
+          values: data.map((d) => d.income + d.incomeWithPending),
+          dashed: true,
+        },
+        {
+          key: 'expenseProj',
+          label: 'Despesas (+ pendentes)',
+          color: '#FDA4AF',
+          values: data.map((d) => d.expense + d.expenseWithPending),
+          dashed: true,
+        },
+        {
+          key: 'balance',
+          label: 'Resultado do mês',
+          color: '#38BDF8',
+          values: data.map((d) => d.balance),
+          dashed: false,
+        },
+      ]
+    : [
+        {
+          key: 'income',
+          label: 'Receitas',
+          color: '#22C55E',
+          values: data.map((d) => d.income),
+          dashed: false,
+        },
+        {
+          key: 'expense',
+          label: 'Despesas',
+          color: '#F43F5E',
+          values: data.map((d) => d.expense),
+          dashed: false,
+        },
+        {
+          key: 'balance',
+          label: 'Resultado do mês',
+          color: '#38BDF8',
+          values: data.map((d) => d.balance),
+          dashed: false,
+        },
+      ];
 
   return (
     <section className="bg-vybe-card p-5 rounded-xl shadow-lg border border-gray-800">
@@ -256,32 +218,45 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
             <LineChart size={18} className="text-vybe-accent" />
             Receitas vs. Despesas por Mês
           </h2>
-          <p className="text-xs text-gray-500">Valores em R$</p>
+          <p className="text-xs text-gray-500">
+            Valores realizados (pagos/recebidos) · eixo em R$
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-400">Período:</label>
-          <select
-            value={selectedRange}
-            onChange={(e) => setSelectedRange(e.target.value as RangeOption)}
-            className="bg-[#121212] border border-gray-700 rounded-md px-2 py-1.5 text-xs text-white outline-none focus:border-vybe-accent"
-          >
-            {RANGE_OPTIONS.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includePending}
+              onChange={(e) => setIncludePending(e.target.checked)}
+              className="rounded border-gray-600"
+            />
+            Incluir pendentes
+          </label>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-400">Período:</label>
+            <select
+              value={selectedRange}
+              onChange={(e) => setSelectedRange(e.target.value as RangeOption)}
+              className="bg-[#121212] border border-gray-700 rounded-md px-2 py-1.5 text-xs text-white outline-none focus:border-vybe-accent"
+            >
+              {RANGE_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-4">
+      <div className="flex flex-wrap gap-x-5 gap-y-2 mb-4">
         {series.map((s) => (
-          <div key={s.key} className="flex items-center gap-1.5 text-[11px] text-gray-400">
+          <div key={s.key} className="flex items-center gap-2 text-xs text-gray-300">
             <span
-              className="inline-block w-7 h-0.5"
+              className="inline-block w-8 h-0.5 rounded-full"
               style={{
-                backgroundColor: s.color,
-                borderTop: s.dashed ? `2px dashed ${s.color}` : `2px solid ${s.color}`,
+                backgroundColor: s.dashed ? 'transparent' : s.color,
+                borderTop: s.dashed ? `2px dashed ${s.color}` : undefined,
               }}
             />
             <span>{s.label}</span>
@@ -295,26 +270,36 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <div style={{ minWidth: `${chartWidth + 20}px` }}>
+          <div style={{ minWidth: `${chartWidth}px` }}>
             <svg
               width={chartWidth}
-              height={chartHeight + 24}
+              height={plotHeight + 28}
               className="block"
               role="img"
-              aria-label="Gráfico de linhas de fluxo de caixa"
+              aria-label="Gráfico de receitas e despesas mensais"
             >
-              {[...Array(6)].map((_, i) => {
-                const y = (chartHeight / 5) * i;
+              {yTicks.map((tick, i) => {
+                const y = yFor(tick);
                 return (
-                  <line
-                    key={`grid-${i}`}
-                    x1={0}
-                    x2={chartWidth}
-                    y1={y}
-                    y2={y}
-                    stroke="#2A2F3A"
-                    strokeWidth="1"
-                  />
+                  <g key={`y-${i}`}>
+                    <line
+                      x1={marginLeft}
+                      x2={chartWidth - marginRight}
+                      y1={y}
+                      y2={y}
+                      stroke={tick === 0 || Math.abs(tick) < yRange * 0.02 ? '#4B5563' : '#2A2F3A'}
+                      strokeWidth={tick === 0 || Math.abs(tick) < yRange * 0.02 ? 1.5 : 1}
+                    />
+                    <text
+                      x={marginLeft - 8}
+                      y={y + 4}
+                      textAnchor="end"
+                      fill="#9CA3AF"
+                      fontSize="10"
+                    >
+                      {formatAxisValue(tick)}
+                    </text>
+                  </g>
                 );
               })}
 
@@ -323,38 +308,35 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
                   <polyline
                     fill="none"
                     stroke={s.color}
-                    strokeWidth="2"
-                    strokeDasharray={s.dashed ? '5 4' : undefined}
+                    strokeWidth={s.key === 'balance' ? 2.5 : 2}
+                    strokeDasharray={s.dashed ? '6 4' : undefined}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     points={buildPoints(s.values)}
+                    opacity={s.dashed ? 0.85 : 1}
                   />
                   {s.values.map((v, i) => (
                     <circle
                       key={`${s.key}-${i}`}
-                      cx={i * xStep}
+                      cx={marginLeft + i * xStep}
                       cy={yFor(v)}
-                      r="2.5"
+                      r={s.key === 'balance' ? 3 : 2.5}
                       fill={s.color}
+                      opacity={s.dashed ? 0.7 : 1}
                     >
                       <title>{`${s.label}: ${formatCurrency(v)}`}</title>
                     </circle>
                   ))}
                 </g>
               ))}
-
-              <line
-                x1={0}
-                x2={chartWidth}
-                y1={yFor(0)}
-                y2={yFor(0)}
-                stroke="#4B5563"
-                strokeWidth="1"
-              />
             </svg>
             <div
-              className="mt-1 grid"
-              style={{ gridTemplateColumns: `repeat(${data.length}, minmax(36px, 1fr))` }}
+              className="grid mt-1"
+              style={{
+                marginLeft: `${marginLeft}px`,
+                width: `${plotWidth}px`,
+                gridTemplateColumns: `repeat(${data.length}, minmax(40px, 1fr))`,
+              }}
             >
               {data.map((d) => (
                 <span
