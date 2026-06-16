@@ -183,17 +183,14 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [workspaceOwnerId, setWorkspaceOwnerId] = useState('');
-  const [activeTab, setActiveTab] = useState<AppTab>(() => pathToTab(window.location.pathname));
+  const activeTab = useMemo(
+    () => pathToTab(location.pathname),
+    [location.pathname],
+  );
   const [tabBeforeSettings, setTabBeforeSettings] = useState<Exclude<AppTab, 'settings'>>('dashboard');
 
-  useEffect(() => {
-    const tab = pathToTab(location.pathname);
-    if (tab !== activeTab) setActiveTab(tab);
-  }, [location.pathname, activeTab]);
-
-  const navigateToTab = useCallback(
+  const setActiveTab = useCallback(
     (tab: AppTab) => {
-      setActiveTab(tab);
       navigate(tabToPath(tab));
     },
     [navigate],
@@ -1026,7 +1023,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     workspaceOwnerId,
     isLoadingData,
     activeTab,
-    setActiveTab: navigateToTab,
+    setActiveTab,
     tabBeforeSettings,
     setTabBeforeSettings,
     transactions,

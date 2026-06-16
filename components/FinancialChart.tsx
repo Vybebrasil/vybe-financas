@@ -17,11 +17,13 @@ type RangeOption = '6m' | '12m' | '24m';
 type MonthlyPoint = {
   key: string;
   label: string;
-  income: number;
-  expense: number;
+  incomePaid: number;
+  expensePaid: number;
+  incomePending: number;
+  expensePending: number;
+  incomeTotal: number;
+  expenseTotal: number;
   balance: number;
-  incomeWithPending: number;
-  expenseWithPending: number;
 };
 
 const RANGE_OPTIONS: Array<{ id: RangeOption; label: string }> = [
@@ -67,6 +69,23 @@ function buildMonthRange(count: number): string[] {
   return keys;
 }
 
+function niceTickRange(maxValue: number): { max: number; ticks: number[] } {
+  if (maxValue <= 0) return { max: 1, ticks: [0, 0.25, 0.5, 0.75, 1] };
+
+  const roughStep = maxValue / 4;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const normalized = roughStep / magnitude;
+  const niceMultiplier =
+    normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  const step = niceMultiplier * magnitude;
+  const max = Math.ceil(maxValue / step) * step;
+
+  return {
+    max,
+    ticks: Array.from({ length: 5 }, (_, i) => step * i),
+  };
+}
+
 const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
   const [selectedRange, setSelectedRange] = useState<RangeOption>('12m');
   const [includePending, setIncludePending] = useState(false);
@@ -80,11 +99,13 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
       monthMap.set(key, {
         key,
         label: formatMonthLabel(key),
-        income: 0,
-        expense: 0,
+        incomePaid: 0,
+        expensePaid: 0,
+        incomePending: 0,
+        expensePending: 0,
+        incomeTotal: 0,
+        expenseTotal: 0,
         balance: 0,
-        incomeWithPending: 0,
-        expenseWithPending: 0,
       });
     }
 
@@ -101,114 +122,62 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
       if (!point) continue;
 
       if (t.type === TransactionType.INCOME) {
-        if (isPaid) point.income += amount;
-        else point.incomeWithPending += amount;
+        if (isPaid) point.incomePaid += amount;
+        else point.incomePending += amount;
       } else if (t.type === TransactionType.EXPENSE) {
-        if (isPaid) point.expense += amount;
-        else point.expenseWithPending += amount;
+        if (isPaid) point.expensePaid += amount;
+        else point.expensePending += amount;
       }
     }
 
     return monthKeys.map((key) => {
       const p = monthMap.get(key)!;
-      p.balance = p.income - p.expense;
+      p.incomeTotal = includePending ? p.incomePaid + p.incomePending : p.incomePaid;
+      p.expenseTotal = includePending ? p.expensePaid + p.expensePending : p.expensePaid;
+      p.balance = p.incomeTotal - p.expenseTotal;
       return p;
     });
-  }, [transactions, selectedRange]);
+  }, [transactions, selectedRange, includePending]);
 
-  const marginLeft = 58;
-  const marginRight = 12;
+  const summary = useMemo(() => {
+    const income = data.reduce((sum, d) => sum + d.incomeTotal, 0);
+    const expense = data.reduce((sum, d) => sum + d.expenseTotal, 0);
+    const balance = income - expense;
+    const margin = income > 0 ? (balance / income) * 100 : 0;
+    return { income, expense, balance, margin };
+  }, [data]);
+
+  const marginLeft = 62;
+  const marginRight = 18;
   const plotHeight = 260;
-  const plotWidth = Math.max(520, data.length * 48);
+  const plotWidth = Math.max(560, data.length * 66);
   const chartWidth = plotWidth + marginLeft + marginRight;
-  const xStep = data.length > 1 ? plotWidth / (data.length - 1) : 0;
+  const bandWidth = plotWidth / Math.max(data.length, 1);
+  const barWidth = Math.min(22, Math.max(10, bandWidth * 0.26));
+  const groupCenter = (index: number) => marginLeft + bandWidth * index + bandWidth / 2;
 
-  const yValues = data.flatMap((d) => {
-    const base = [d.income, d.expense, d.balance];
-    if (!includePending) return base;
-    return [
-      ...base,
-      d.income + d.incomeWithPending,
-      d.expense + d.expenseWithPending,
-    ];
-  });
+  const maxBarValue = Math.max(1, ...data.flatMap((d) => [d.incomeTotal, d.expenseTotal]));
+  const { max: barMax, ticks: yTicks } = useMemo(
+    () => niceTickRange(maxBarValue),
+    [maxBarValue],
+  );
+  const barYFor = (value: number) => plotHeight - (value / barMax) * plotHeight;
 
-  const minY = Math.min(0, ...yValues);
-  const maxY = Math.max(1, ...yValues);
-  const yRange = Math.max(1, maxY - minY);
-  const yFor = (value: number) => plotHeight - ((value - minY) / yRange) * plotHeight;
+  const maxAbsBalance = Math.max(1, ...data.map((d) => Math.abs(d.balance)));
+  const balanceYFor = (value: number) => {
+    const mid = plotHeight / 2;
+    return mid - (value / maxAbsBalance) * (plotHeight * 0.38);
+  };
 
-  const yTicks = useMemo(() => {
-    const steps = 5;
-    return Array.from({ length: steps + 1 }, (_, i) => minY + (yRange * i) / steps);
-  }, [minY, yRange]);
+  const balancePoints = data
+    .map((d, i) => `${groupCenter(i)},${balanceYFor(d.balance)}`)
+    .join(' ');
 
-  const buildPoints = (values: number[]) =>
-    values
-      .map((v, i) => `${marginLeft + i * xStep},${yFor(v)}`)
-      .join(' ');
-
-  const series = includePending
-    ? [
-        {
-          key: 'income',
-          label: 'Receitas (realizadas)',
-          color: '#22C55E',
-          values: data.map((d) => d.income),
-          dashed: false,
-        },
-        {
-          key: 'expense',
-          label: 'Despesas (realizadas)',
-          color: '#F43F5E',
-          values: data.map((d) => d.expense),
-          dashed: false,
-        },
-        {
-          key: 'incomeProj',
-          label: 'Receitas (+ pendentes)',
-          color: '#86EFAC',
-          values: data.map((d) => d.income + d.incomeWithPending),
-          dashed: true,
-        },
-        {
-          key: 'expenseProj',
-          label: 'Despesas (+ pendentes)',
-          color: '#FDA4AF',
-          values: data.map((d) => d.expense + d.expenseWithPending),
-          dashed: true,
-        },
-        {
-          key: 'balance',
-          label: 'Resultado do mês',
-          color: '#38BDF8',
-          values: data.map((d) => d.balance),
-          dashed: false,
-        },
-      ]
-    : [
-        {
-          key: 'income',
-          label: 'Receitas',
-          color: '#22C55E',
-          values: data.map((d) => d.income),
-          dashed: false,
-        },
-        {
-          key: 'expense',
-          label: 'Despesas',
-          color: '#F43F5E',
-          values: data.map((d) => d.expense),
-          dashed: false,
-        },
-        {
-          key: 'balance',
-          label: 'Resultado do mês',
-          color: '#38BDF8',
-          values: data.map((d) => d.balance),
-          dashed: false,
-        },
-      ];
+  const legend = [
+    { key: 'income', label: includePending ? 'Receitas (+ pendentes)' : 'Receitas', color: '#22C55E' },
+    { key: 'expense', label: includePending ? 'Despesas (+ pendentes)' : 'Despesas', color: '#F43F5E' },
+    { key: 'balance', label: 'Resultado', color: '#38BDF8' },
+  ];
 
   return (
     <section className="bg-vybe-card p-5 rounded-xl shadow-lg border border-gray-800">
@@ -249,14 +218,36 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
+        <div className="bg-[#121212] border border-gray-800 rounded-lg p-3">
+          <p className="text-[10px] uppercase text-gray-500">Receitas</p>
+          <p className="text-sm font-bold text-green-400">{formatCurrency(summary.income)}</p>
+        </div>
+        <div className="bg-[#121212] border border-gray-800 rounded-lg p-3">
+          <p className="text-[10px] uppercase text-gray-500">Despesas</p>
+          <p className="text-sm font-bold text-rose-400">{formatCurrency(summary.expense)}</p>
+        </div>
+        <div className="bg-[#121212] border border-gray-800 rounded-lg p-3">
+          <p className="text-[10px] uppercase text-gray-500">Resultado</p>
+          <p className={`text-sm font-bold ${summary.balance >= 0 ? 'text-sky-400' : 'text-rose-400'}`}>
+            {formatCurrency(summary.balance)}
+          </p>
+        </div>
+        <div className="bg-[#121212] border border-gray-800 rounded-lg p-3">
+          <p className="text-[10px] uppercase text-gray-500">Margem</p>
+          <p className={`text-sm font-bold ${summary.margin >= 0 ? 'text-gray-200' : 'text-rose-400'}`}>
+            {summary.margin.toFixed(1)}%
+          </p>
+        </div>
+      </div>
+
       <div className="flex flex-wrap gap-x-5 gap-y-2 mb-4">
-        {series.map((s) => (
+        {legend.map((s) => (
           <div key={s.key} className="flex items-center gap-2 text-xs text-gray-300">
             <span
-              className="inline-block w-8 h-0.5 rounded-full"
+              className={`inline-block rounded-full ${s.key === 'balance' ? 'w-8 h-0.5' : 'w-3 h-3'}`}
               style={{
-                backgroundColor: s.dashed ? 'transparent' : s.color,
-                borderTop: s.dashed ? `2px dashed ${s.color}` : undefined,
+                backgroundColor: s.color,
               }}
             />
             <span>{s.label}</span>
@@ -279,7 +270,7 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
               aria-label="Gráfico de receitas e despesas mensais"
             >
               {yTicks.map((tick, i) => {
-                const y = yFor(tick);
+                const y = barYFor(tick);
                 return (
                   <g key={`y-${i}`}>
                     <line
@@ -287,8 +278,8 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
                       x2={chartWidth - marginRight}
                       y1={y}
                       y2={y}
-                      stroke={tick === 0 || Math.abs(tick) < yRange * 0.02 ? '#4B5563' : '#2A2F3A'}
-                      strokeWidth={tick === 0 || Math.abs(tick) < yRange * 0.02 ? 1.5 : 1}
+                      stroke={tick === 0 ? '#4B5563' : '#2A2F3A'}
+                      strokeWidth={tick === 0 ? 1.5 : 1}
                     />
                     <text
                       x={marginLeft - 8}
@@ -303,31 +294,76 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
                 );
               })}
 
-              {series.map((s) => (
-                <g key={s.key}>
-                  <polyline
-                    fill="none"
-                    stroke={s.color}
-                    strokeWidth={s.key === 'balance' ? 2.5 : 2}
-                    strokeDasharray={s.dashed ? '6 4' : undefined}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    points={buildPoints(s.values)}
-                    opacity={s.dashed ? 0.85 : 1}
-                  />
-                  {s.values.map((v, i) => (
-                    <circle
-                      key={`${s.key}-${i}`}
-                      cx={marginLeft + i * xStep}
-                      cy={yFor(v)}
-                      r={s.key === 'balance' ? 3 : 2.5}
-                      fill={s.color}
-                      opacity={s.dashed ? 0.7 : 1}
+              {data.map((d, i) => {
+                const center = groupCenter(i);
+                const incomeHeight = plotHeight - barYFor(d.incomeTotal);
+                const expenseHeight = plotHeight - barYFor(d.expenseTotal);
+                return (
+                  <g key={d.key}>
+                    <rect
+                      x={center - barWidth - 3}
+                      y={barYFor(d.incomeTotal)}
+                      width={barWidth}
+                      height={Math.max(0, incomeHeight)}
+                      rx={4}
+                      fill="#22C55E"
                     >
-                      <title>{`${s.label}: ${formatCurrency(v)}`}</title>
-                    </circle>
-                  ))}
-                </g>
+                      <title>
+                        {`${d.label} · Receitas: ${formatCurrency(d.incomeTotal)}${
+                          includePending && d.incomePending > 0
+                            ? ` (${formatCurrency(d.incomePending)} pendente)`
+                            : ''
+                        }`}
+                      </title>
+                    </rect>
+                    <rect
+                      x={center + 3}
+                      y={barYFor(d.expenseTotal)}
+                      width={barWidth}
+                      height={Math.max(0, expenseHeight)}
+                      rx={4}
+                      fill="#F43F5E"
+                    >
+                      <title>
+                        {`${d.label} · Despesas: ${formatCurrency(d.expenseTotal)}${
+                          includePending && d.expensePending > 0
+                            ? ` (${formatCurrency(d.expensePending)} pendente)`
+                            : ''
+                        }`}
+                      </title>
+                    </rect>
+                  </g>
+                );
+              })}
+
+              <line
+                x1={marginLeft}
+                x2={chartWidth - marginRight}
+                y1={balanceYFor(0)}
+                y2={balanceYFor(0)}
+                stroke="#334155"
+                strokeDasharray="4 4"
+              />
+
+              <polyline
+                fill="none"
+                stroke="#38BDF8"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                points={balancePoints}
+              />
+
+              {data.map((d, i) => (
+                <circle
+                  key={`balance-${d.key}`}
+                  cx={groupCenter(i)}
+                  cy={balanceYFor(d.balance)}
+                  r="3"
+                  fill={d.balance >= 0 ? '#38BDF8' : '#FB7185'}
+                >
+                  <title>{`${d.label} · Resultado: ${formatCurrency(d.balance)}`}</title>
+                </circle>
               ))}
             </svg>
             <div
