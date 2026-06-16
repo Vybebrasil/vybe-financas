@@ -3,6 +3,7 @@ import { Transaction, TransactionType, Client, CompanySettings } from '../types'
 import { formatCurrency, formatDate } from '../utils';
 import { getTransactionCashDate } from '../src/services/transactionDates';
 import { X, Printer, FileCheck, Download } from 'lucide-react';
+import { createPdfDocument } from '../src/lib/pdf';
 import { useToast } from './ToastProvider';
 
 interface ReceiptModalProps {
@@ -27,14 +28,7 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
   };
 
   const handleDownloadPDF = () => {
-    const win = window as any;
-    if (!win.jspdf) {
-      toast.info('Biblioteca PDF carregando...');
-      return;
-    }
-
-    const { jsPDF } = win.jspdf;
-    const doc = new jsPDF();
+    const doc = createPdfDocument();
     
     // Configurações visuais
     const pageWidth = doc.internal.pageSize.getWidth();

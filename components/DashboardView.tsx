@@ -44,6 +44,9 @@ import {
 } from '../src/services/dashboardMetrics';
 import PayrollStatusSection from './PayrollStatusSection';
 import SubscriptionsStatusSection from './SubscriptionsStatusSection';
+import BillingDispatchPanel from './BillingDispatchPanel';
+import ClientMarginSection from './ClientMarginSection';
+import BudgetVsActualSection from './BudgetVsActualSection';
 const PERIOD_OPTIONS: { id: DashboardPeriodPreset; label: string }[] = [
   { id: 'this_month', label: 'Este mês' },
   { id: 'last_month', label: 'Mês anterior' },
@@ -60,6 +63,7 @@ const DashboardView: React.FC = () => {
     openReportsWithDateRange,
     handleOpenBillingModal,
     handleEditTransaction,
+    monthlyBudgets,
   } = useAppData();
 
   const [period, setPeriod] = useState<DashboardPeriodPreset>('this_month');
@@ -73,6 +77,13 @@ const DashboardView: React.FC = () => {
     () => getPeriodRange(period, new Date(), calendarYear),
     [period, calendarYear],
   );
+
+  const marginRange = useMemo(
+    () => ({ startDate: range.startDate, endDate: range.endDate }),
+    [range],
+  );
+
+  const budgetMonthKey = range.startDate.slice(0, 7);
 
   const comparison = useMemo(
     () => computePeriodComparison(transactions, range),
@@ -427,6 +438,21 @@ const DashboardView: React.FC = () => {
               </button>
             </section>
           )}
+
+          <BillingDispatchPanel clients={clients} />
+
+          <ClientMarginSection
+            clients={clients}
+            transactions={transactions}
+            range={marginRange}
+            compact
+          />
+
+          <BudgetVsActualSection
+            transactions={transactions}
+            budgets={monthlyBudgets}
+            monthKey={budgetMonthKey}
+          />
 
           <section className="bg-vybe-card border border-gray-800 rounded-xl p-4">
             <h3 className="text-sm font-bold text-white mb-2 flex items-center gap-2">

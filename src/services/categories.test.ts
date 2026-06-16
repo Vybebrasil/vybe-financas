@@ -36,6 +36,8 @@ describe('categories', () => {
   });
 
   it('trata lista vazia como padrões', () => {
-    expect(resolveCategories({ name: 'X', cnpj: '', categories: [] }).length).toBe(6);
+    expect(resolveCategories({ name: 'X', cnpj: '', categories: [] }).length).toBe(
+      resolveCategories().length,
+    );
   });
 });

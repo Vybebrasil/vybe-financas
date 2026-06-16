@@ -6,6 +6,8 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { pathToTab, tabToPath } from '../navigation/tabRoutes';
 import {
   Transaction,
   Client,
@@ -38,6 +40,13 @@ import { DEFAULT_CATEGORIES } from '../services/categories';
 import { useToast } from '../../components/ToastProvider';
 import { getErrorMessage, isMissingTableError } from '../utils/errorMessage';
 import { withComputedContractDates } from '../services/contractValidity';
+import type { MonthlyBudget } from '../services/budgetMetrics';
+import {
+  type PeriodClosure,
+  isTransactionInClosedPeriod,
+  monthKeyFromDate,
+} from '../services/periodClosure';
+import { getTransactionFilterDate } from '../services/transactionDates';
 
 export type AppTab =
   | 'dashboard'
@@ -65,6 +74,7 @@ export type ReportsDateFilter = {
 
 export interface AppDataContextValue {
   userEmail: string;
+  workspaceOwnerId: string;
   isLoadingData: boolean;
   activeTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
@@ -146,6 +156,11 @@ export interface AppDataContextValue {
   setIsHistoryModalOpen: (open: boolean) => void;
   setIsEmployeeModalOpen: (open: boolean) => void;
   setIsReceiptModalOpen: (open: boolean) => void;
+  monthlyBudgets: MonthlyBudget[];
+  periodClosures: PeriodClosure[];
+  refreshBudgetsAndClosures: () => Promise<void>;
+  handleSharePortalLink: (client: Client) => Promise<void>;
+  isPeriodClosed: (monthKey: string) => boolean;
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
@@ -162,11 +177,27 @@ interface AppDataProviderProps {
 
 export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) => {
   const toast = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [userEmail, setUserEmail] = useState('');
-  const [activeTab, setActiveTab] = useState<AppTab>('dashboard');
+  const [workspaceOwnerId, setWorkspaceOwnerId] = useState('');
+  const [activeTab, setActiveTab] = useState<AppTab>(() => pathToTab(window.location.pathname));
   const [tabBeforeSettings, setTabBeforeSettings] = useState<Exclude<AppTab, 'settings'>>('dashboard');
+
+  useEffect(() => {
+    const tab = pathToTab(location.pathname);
+    if (tab !== activeTab) setActiveTab(tab);
+  }, [location.pathname, activeTab]);
+
+  const navigateToTab = useCallback(
+    (tab: AppTab) => {
+      setActiveTab(tab);
+      navigate(tabToPath(tab));
+    },
+    [navigate],
+  );
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [preFilledTransaction, setPreFilledTransaction] = useState<PreFilledTransaction | null>(null);
@@ -209,8 +240,39 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole>('owner');
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isLoadingTeam, setIsLoadingTeam] = useState(false);
+  const [monthlyBudgets, setMonthlyBudgets] = useState<MonthlyBudget[]>([]);
+  const [periodClosures, setPeriodClosures] = useState<PeriodClosure[]>([]);
 
   const summary = useMemo(() => computeDashboardSummary(transactions), [transactions]);
+
+  const isPeriodClosed = useCallback(
+    (monthKey: string) => periodClosures.some((c) => c.monthKey === monthKey),
+    [periodClosures],
+  );
+
+  const assertPeriodOpenForTransaction = useCallback(
+    (transaction: Pick<Transaction, 'date' | 'paidDate' | 'status'>) => {
+      const monthKey = monthKeyFromDate(getTransactionFilterDate(transaction as Transaction));
+      if (isPeriodClosed(monthKey)) {
+        throw new Error(`O período ${monthKey} está fechado. Reabra em Financeiro para editar.`);
+      }
+    },
+    [isPeriodClosed],
+  );
+
+  const refreshBudgetsAndClosures = useCallback(async () => {
+    try {
+      const [budgets, closures] = await Promise.all([
+        api.budgets.list(),
+        api.closures.list(),
+      ]);
+      setMonthlyBudgets(budgets);
+      setPeriodClosures(closures);
+    } catch {
+      setMonthlyBudgets([]);
+      setPeriodClosures([]);
+    }
+  }, []);
 
   const refreshAuditLogs = useCallback(async () => {
     try {
@@ -247,6 +309,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       setUserEmail(user.email || '');
 
       const ctx = await api.workspace.bootstrap();
+      setWorkspaceOwnerId(ctx.ownerId);
       setWorkspaceRole(ctx.role);
       setWorkspaceTeamActive(isTeamWorkspaceActive(ctx));
       setIsLoadingTeam(true);
@@ -307,6 +370,8 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
 
       const settings = await api.companySettings.load();
       setCompanySettings(settings);
+
+      await refreshBudgetsAndClosures();
     } catch (error: unknown) {
       console.error('Erro ao carregar dados:', error);
       const msg = getErrorMessage(error);
@@ -329,7 +394,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     } finally {
       setIsLoadingData(false);
     }
-  }, [toast]);
+  }, [toast, refreshBudgetsAndClosures]);
 
   useEffect(() => {
     fetchData();
@@ -481,6 +546,12 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   };
 
   const handleAddTransaction = async (transaction: Transaction) => {
+    try {
+      assertPeriodOpenForTransaction(transaction);
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+      return;
+    }
     const newTrans = await api.transactions.create(transaction);
     setTransactions((prev) => [newTrans, ...prev]);
     setPreFilledTransaction(null);
@@ -493,6 +564,11 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   };
 
   const handleDeleteTransaction = (id: string) => {
+    const removed = transactions.find((t) => t.id === id);
+    if (removed && isTransactionInClosedPeriod(removed, periodClosures)) {
+      toast.error('Este lançamento pertence a um período fechado.');
+      return;
+    }
     setConfirmDialog({
       title: 'Excluir transação',
       message: 'Deseja realmente excluir esta transação? Esta ação não pode ser desfeita.',
@@ -518,6 +594,14 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   };
 
   const handleUpdateTransaction = async (transaction: Transaction) => {
+    const existing = transactions.find((t) => t.id === transaction.id);
+    if (
+      (existing && isTransactionInClosedPeriod(existing, periodClosures)) ||
+      isTransactionInClosedPeriod(transaction, periodClosures)
+    ) {
+      toast.error('Este lançamento pertence a um período fechado.');
+      return;
+    }
     const updated = await api.transactions.update(transaction.id, transaction);
     setTransactions((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
     setEditingTransaction(null);
@@ -914,6 +998,18 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleSharePortalLink = async (client: Client) => {
+    try {
+      const token = await api.portal.getOrCreateToken(client.id);
+      const url = api.portal.buildPortalUrl(token);
+      await navigator.clipboard.writeText(url);
+      toast.success('Link do portal copiado para a área de transferência.');
+    } catch (err) {
+      console.error(err);
+      toast.error('Não foi possível gerar o link do portal.');
+    }
+  };
+
   const handleGenerateReceipt = (transaction: Transaction) => {
     setReceiptTransaction(transaction);
     if (transaction.clientId) {
@@ -927,9 +1023,10 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
 
   const value: AppDataContextValue = {
     userEmail,
+    workspaceOwnerId,
     isLoadingData,
     activeTab,
-    setActiveTab,
+    setActiveTab: navigateToTab,
     tabBeforeSettings,
     setTabBeforeSettings,
     transactions,
@@ -1005,6 +1102,11 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     setIsHistoryModalOpen,
     setIsEmployeeModalOpen,
     setIsReceiptModalOpen,
+    monthlyBudgets,
+    periodClosures,
+    refreshBudgetsAndClosures,
+    handleSharePortalLink,
+    isPeriodClosed,
   };
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

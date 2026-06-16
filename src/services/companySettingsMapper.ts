@@ -5,9 +5,12 @@ import {
   MessageTemplate,
   PixKeyType,
   WhatsAppIntegrationSettings,
+  BillingAutomationSettings,
+  PaymentProviderSettings,
 } from '../../types';
 import { DEFAULT_CATEGORIES } from './categories';
 import { DEFAULT_MESSAGE_TEMPLATES, DEFAULT_SERVICE_PLANS } from '../../constants';
+import { defaultBillingAutomation } from './billingAutomation';
 
 export interface CompanySettingsRow {
   user_id: string;
@@ -34,6 +37,19 @@ interface IntegrationsDb {
     payment_link?: string;
     instructions?: string;
   };
+  billing?: {
+    auto_enabled?: boolean;
+    pre_due_days?: number;
+    whatsapp_channel?: boolean;
+    email_channel?: boolean;
+    dispatch_hour_local?: number;
+  };
+  payment_provider?: {
+    enabled?: boolean;
+    provider?: string;
+    webhook_secret?: string;
+    email_from?: string;
+  };
 }
 
 export function mapIntegrationsFromDB(raw: unknown): CompanyIntegrations | undefined {
@@ -41,7 +57,9 @@ export function mapIntegrationsFromDB(raw: unknown): CompanyIntegrations | undef
   const db = raw as IntegrationsDb;
   const whatsapp = db.whatsapp;
   const payment = db.payment;
-  if (!whatsapp && !payment) return undefined;
+  const billing = db.billing;
+  const paymentProvider = db.payment_provider;
+  if (!whatsapp && !payment && !billing && !paymentProvider) return undefined;
   const result: CompanyIntegrations = {};
   if (whatsapp) {
     result.whatsapp = {
@@ -57,6 +75,23 @@ export function mapIntegrationsFromDB(raw: unknown): CompanyIntegrations | undef
       instructions: payment.instructions?.trim() || undefined,
     };
   }
+  if (billing) {
+    result.billing = {
+      autoEnabled: Boolean(billing.auto_enabled),
+      preDueDays: billing.pre_due_days ?? 3,
+      whatsappChannel: billing.whatsapp_channel !== false,
+      emailChannel: Boolean(billing.email_channel),
+      dispatchHourLocal: billing.dispatch_hour_local,
+    };
+  }
+  if (paymentProvider) {
+    result.paymentProvider = {
+      enabled: Boolean(paymentProvider.enabled),
+      provider: (paymentProvider.provider as PaymentProviderSettings['provider']) || 'generic',
+      webhookSecret: paymentProvider.webhook_secret?.trim() || undefined,
+      emailFrom: paymentProvider.email_from?.trim() || undefined,
+    };
+  }
   return result;
 }
 
@@ -65,7 +100,9 @@ export function mapIntegrationsToDB(
 ): IntegrationsDb {
   const w = integrations?.whatsapp;
   const p = integrations?.payment;
-  if (!w && !p) return {};
+  const b = integrations?.billing;
+  const pp = integrations?.paymentProvider;
+  if (!w && !p && !b && !pp) return {};
   const db: IntegrationsDb = {};
   if (w) {
     db.whatsapp = {
@@ -79,6 +116,23 @@ export function mapIntegrationsToDB(
       pix_key_type: p.pixKeyType || undefined,
       payment_link: p.paymentLink?.trim() || undefined,
       instructions: p.instructions?.trim() || undefined,
+    };
+  }
+  if (b) {
+    db.billing = {
+      auto_enabled: b.autoEnabled,
+      pre_due_days: b.preDueDays,
+      whatsapp_channel: b.whatsappChannel,
+      email_channel: b.emailChannel,
+      dispatch_hour_local: b.dispatchHourLocal,
+    };
+  }
+  if (pp) {
+    db.payment_provider = {
+      enabled: pp.enabled,
+      provider: pp.provider,
+      webhook_secret: pp.webhookSecret?.trim() || undefined,
+      email_from: pp.emailFrom?.trim() || undefined,
     };
   }
   return db;
@@ -110,6 +164,8 @@ export const defaultCompanySettings = (): CompanySettings => ({
   integrations: {
     whatsapp: defaultWhatsAppIntegration(),
     payment: defaultPaymentIntegration(),
+    billing: defaultBillingAutomation(),
+    paymentProvider: { enabled: false, provider: 'generic' as const },
   },
 });
 

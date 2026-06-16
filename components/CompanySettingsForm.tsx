@@ -7,6 +7,8 @@ import { Save, Image as ImageIcon, Upload, LogOut, Plus, Trash2, Layers } from '
 import { api } from '../src/services/api';
 import MessageTemplatesSection from './MessageTemplatesSection';
 import WhatsAppIntegrationSection from './WhatsAppIntegrationSection';
+import BillingAutomationSection from './BillingAutomationSection';
+import PaymentProviderSection from './PaymentProviderSection';
 import PaymentIntegrationSection from './PaymentIntegrationSection';
 import { useToast } from './ToastProvider';
 
@@ -27,6 +29,7 @@ interface CompanySettingsFormProps {
   onPersistCategories?: (categories: CategoryConfig[]) => Promise<void>;
   /** Re-sincroniza o formulário quando o pai reabre (ex.: modal) */
   syncWhen?: boolean;
+  workspaceOwnerId?: string;
 }
 
 const CompanySettingsForm: React.FC<CompanySettingsFormProps> = ({
@@ -42,6 +45,7 @@ const CompanySettingsForm: React.FC<CompanySettingsFormProps> = ({
   transactions = [],
   onPersistCategories,
   syncWhen = true,
+  workspaceOwnerId,
 }) => {
   const toast = useToast();
   const [formData, setFormData] = useState<CompanySettings>(settings);
@@ -250,6 +254,10 @@ const CompanySettingsForm: React.FC<CompanySettingsFormProps> = ({
 
       {showMessageTemplates && (
         <>
+          <BillingAutomationSection
+            integrations={formData.integrations}
+            onChange={(integrations) => setFormData({ ...formData, integrations })}
+          />
           <WhatsAppIntegrationSection
             integrations={formData.integrations}
             onChange={(integrations) => setFormData({ ...formData, integrations })}
@@ -257,6 +265,11 @@ const CompanySettingsForm: React.FC<CompanySettingsFormProps> = ({
           <PaymentIntegrationSection
             integrations={formData.integrations}
             onChange={(integrations) => setFormData({ ...formData, integrations })}
+          />
+          <PaymentProviderSection
+            integrations={formData.integrations}
+            onChange={(integrations) => setFormData({ ...formData, integrations })}
+            userId={workspaceOwnerId}
           />
           <MessageTemplatesSection
             templates={formData.messageTemplates ?? []}

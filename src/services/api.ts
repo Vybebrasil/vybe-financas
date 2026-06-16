@@ -752,4 +752,229 @@ export const api = {
     log: logAudit,
     list: listAuditLogs,
   },
+
+  billing: {
+    async listDispatchLogs(since?: string) {
+      const { ownerId } = await requireWorkspace();
+      let q = supabase
+        .from('billing_dispatch_log')
+        .select('*')
+        .eq('user_id', ownerId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (since) q = q.gte('dispatch_date', since);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        id: r.id as string,
+        clientId: r.client_id as string,
+        channel: r.channel as 'whatsapp' | 'email',
+        stage: r.stage as string,
+        dispatchDate: String(r.dispatch_date).slice(0, 10),
+        status: r.status as 'sent' | 'failed' | 'skipped',
+        errorMessage: (r.error_message as string) || undefined,
+        templateId: (r.template_id as string) || undefined,
+        createdAt: r.created_at as string,
+      }));
+    },
+  },
+
+  reconciliation: {
+    async importLines(
+      lines: Array<{
+        lineDate: string;
+        description: string;
+        amount: number;
+        bankAccountId?: string;
+      }>,
+      importBatchId: string,
+    ) {
+      const { ownerId } = await requireWorkspace();
+      const rows = lines.map((l) => ({
+        user_id: ownerId,
+        bank_account_id: l.bankAccountId || null,
+        import_batch_id: importBatchId,
+        line_date: l.lineDate,
+        description: l.description,
+        amount: l.amount,
+      }));
+      const { data, error } = await supabase
+        .from('bank_statement_lines')
+        .insert(rows)
+        .select();
+      if (error) throw error;
+      return data ?? [];
+    },
+
+    async listUnreconciled() {
+      const { ownerId } = await requireWorkspace();
+      const { data, error } = await supabase
+        .from('bank_statement_lines')
+        .select('*')
+        .eq('user_id', ownerId)
+        .is('transaction_id', null)
+        .order('line_date', { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        id: r.id as string,
+        bankAccountId: (r.bank_account_id as string) || undefined,
+        importBatchId: r.import_batch_id as string,
+        lineDate: String(r.line_date).slice(0, 10),
+        description: r.description as string,
+        amount: Number(r.amount),
+      }));
+    },
+
+    async reconcile(lineId: string, transactionId: string, paidDate: string) {
+      const { ownerId } = await requireWorkspace();
+      const { error: txError } = await supabase
+        .from('transactions')
+        .update({ status: 'PAID', paid_date: paidDate })
+        .eq('id', transactionId)
+        .eq('user_id', ownerId);
+      if (txError) throw txError;
+
+      const { error: lineError } = await supabase
+        .from('bank_statement_lines')
+        .update({
+          transaction_id: transactionId,
+          reconciled_at: new Date().toISOString(),
+        })
+        .eq('id', lineId)
+        .eq('user_id', ownerId);
+      if (lineError) throw lineError;
+    },
+  },
+
+  portal: {
+    async getOrCreateToken(clientId: string): Promise<string> {
+      const { ownerId } = await requireWorkspace();
+      const { data: existing } = await supabase
+        .from('client_portal_tokens')
+        .select('token')
+        .eq('client_id', clientId)
+        .eq('user_id', ownerId)
+        .maybeSingle();
+
+      if (existing?.token) return existing.token as string;
+
+      const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+      const { error } = await supabase.from('client_portal_tokens').insert({
+        user_id: ownerId,
+        client_id: clientId,
+        token,
+      });
+      if (error) throw error;
+      return token;
+    },
+
+    async regenerateToken(clientId: string): Promise<string> {
+      const { ownerId } = await requireWorkspace();
+      const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+      const { error } = await supabase.from('client_portal_tokens').upsert(
+        {
+          user_id: ownerId,
+          client_id: clientId,
+          token,
+          expires_at: null,
+        },
+        { onConflict: 'client_id' },
+      );
+      if (error) throw error;
+      return token;
+    },
+
+    buildPortalUrl(token: string): string {
+      if (typeof window !== 'undefined') {
+        return `${window.location.origin}/portal/${token}`;
+      }
+      return `/portal/${token}`;
+    },
+  },
+
+  budgets: {
+    async list(monthKey?: string) {
+      const { ownerId } = await requireWorkspace();
+      let q = supabase
+        .from('monthly_budgets')
+        .select('*')
+        .eq('user_id', ownerId)
+        .order('category');
+      if (monthKey) q = q.eq('month_key', monthKey);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        id: r.id as string,
+        monthKey: r.month_key as string,
+        category: r.category as string,
+        amount: Number(r.amount),
+      }));
+    },
+
+    async save(monthKey: string, items: Array<{ category: string; amount: number }>) {
+      const { ownerId } = await requireWorkspace();
+      const rows = items.map((item) => ({
+        user_id: ownerId,
+        month_key: monthKey,
+        category: item.category,
+        amount: item.amount,
+      }));
+      const { error } = await supabase.from('monthly_budgets').upsert(rows, {
+        onConflict: 'user_id,month_key,category',
+      });
+      if (error) throw error;
+    },
+  },
+
+  closures: {
+    async list() {
+      const { ownerId } = await requireWorkspace();
+      const { data, error } = await supabase
+        .from('period_closures')
+        .select('*')
+        .eq('user_id', ownerId)
+        .order('month_key', { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((r) => ({
+        id: r.id as string,
+        monthKey: r.month_key as string,
+        closedAt: r.closed_at as string,
+        closedByEmail: (r.closed_by_email as string) || undefined,
+        notes: (r.notes as string) || undefined,
+      }));
+    },
+
+    async close(monthKey: string, notes?: string) {
+      const { user, ownerId } = await requireWorkspace();
+      const { data, error } = await supabase
+        .from('period_closures')
+        .insert({
+          user_id: ownerId,
+          month_key: monthKey,
+          closed_by_email: user.email ?? undefined,
+          notes: notes?.trim() || null,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return {
+        id: data.id as string,
+        monthKey: data.month_key as string,
+        closedAt: data.closed_at as string,
+        closedByEmail: (data.closed_by_email as string) || undefined,
+        notes: (data.notes as string) || undefined,
+      };
+    },
+
+    async reopen(monthKey: string) {
+      const { ownerId } = await requireWorkspace();
+      const { error } = await supabase
+        .from('period_closures')
+        .delete()
+        .eq('user_id', ownerId)
+        .eq('month_key', monthKey);
+      if (error) throw error;
+    },
+  },
 };

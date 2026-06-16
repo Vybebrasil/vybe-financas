@@ -13,3 +13,12 @@ verify_jwt = true
 
 [functions.whatsapp-context]
 verify_jwt = false
+
+[functions.billing-dispatch]
+verify_jwt = false
+
+[functions.payment-webhook]
+verify_jwt = false
+
+[functions.client-portal]
+verify_jwt = false

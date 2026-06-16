@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Client } from '../types';
 import { formatCurrency } from '../utils';
-import { Trash2, Phone, User, DollarSign, Calendar, Pencil, Search, AlertCircle, FileText, ArrowUpDown } from 'lucide-react';
+import { Trash2, Phone, User, DollarSign, Calendar, Pencil, Search, AlertCircle, FileText, ArrowUpDown, Link2 } from 'lucide-react';
 
 type ClientSortBy = 'dueDay' | 'name' | 'monthlyFee';
 
@@ -11,9 +11,10 @@ interface ClientListProps {
   onEditClient: (client: Client) => void;
   onGenerateCharge: (client: Client) => void;
   onViewHistory: (client: Client) => void;
+  onSharePortalLink: (client: Client) => void;
 }
 
-const ClientList: React.FC<ClientListProps> = ({ clients, onDeleteClient, onEditClient, onGenerateCharge, onViewHistory }) => {
+const ClientList: React.FC<ClientListProps> = ({ clients, onDeleteClient, onEditClient, onGenerateCharge, onViewHistory, onSharePortalLink }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<ClientSortBy>('dueDay');
 
@@ -190,6 +191,14 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onDeleteClient, onEdit
                           title="Ver Histórico Financeiro"
                         >
                           <FileText size={16} />
+                        </button>
+
+                        <button
+                          onClick={() => onSharePortalLink(client)}
+                          className="p-2 text-gray-400 hover:text-[#FF6600] hover:bg-orange-500/10 rounded-full transition-all"
+                          title="Copiar link do portal do cliente"
+                        >
+                          <Link2 size={16} />
                         </button>
 
                         <button

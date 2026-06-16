@@ -13,10 +13,13 @@ import TeamSection from './TeamSection';
 import AuditLogSection from './AuditLogSection';
 import { ArrowLeft, Settings } from 'lucide-react';
 import CompanySettingsForm from './CompanySettingsForm';
+import MonthlyBudgetSection from './MonthlyBudgetSection';
+import { MonthlyBudget } from '../src/services/budgetMetrics';
 
 interface SettingsViewProps {
   settings: CompanySettings;
   userEmail?: string;
+  workspaceOwnerId?: string;
   bankAccounts: BankAccount[];
   transactions: Transaction[];
   onAddBankAccount: (account: BankAccount) => Promise<void>;
@@ -38,11 +41,15 @@ interface SettingsViewProps {
     role: Exclude<WorkspaceRole, 'owner'>,
   ) => Promise<void>;
   onRefreshTeam?: () => Promise<void>;
+  monthlyBudgets?: MonthlyBudget[];
+  budgetMonthKey?: string;
+  onBudgetsSaved?: () => void;
 }
 
 const SettingsView: React.FC<SettingsViewProps> = ({
   settings,
   userEmail,
+  workspaceOwnerId,
   bankAccounts,
   transactions,
   onAddBankAccount,
@@ -61,9 +68,14 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   onRemoveMember,
   onUpdateMemberRole,
   onRefreshTeam,
+  monthlyBudgets = [],
+  budgetMonthKey,
+  onBudgetsSaved,
 }) => {
+  const monthKey = budgetMonthKey ?? new Date().toISOString().slice(0, 7);
+
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center gap-4 mb-8">
         <button
           type="button"
@@ -95,6 +107,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           showMessageTemplates
           transactions={transactions}
           syncWhen
+          workspaceOwnerId={workspaceOwnerId}
         />
         <BankAccountsSection
           accounts={bankAccounts}
@@ -115,6 +128,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         />
         <AuditLogSection logs={auditLogs} isLoading={isLoadingTeam} />
       </section>
+
+      <MonthlyBudgetSection
+        categories={settings.categories ?? []}
+        monthKey={monthKey}
+        initialBudgets={monthlyBudgets}
+        onSaved={() => onBudgetsSaved?.()}
+      />
     </div>
   );
 };

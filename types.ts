@@ -208,6 +208,24 @@ export interface WhatsAppIntegrationSettings {
   n8nWebhookUrl?: string;
 }
 
+/** Régua de cobrança automática */
+export interface BillingAutomationSettings {
+  autoEnabled: boolean;
+  preDueDays: number;
+  whatsappChannel: boolean;
+  emailChannel: boolean;
+  dispatchHourLocal?: number;
+}
+
+/** Webhook de pagamento (Asaas, Mercado Pago, genérico) */
+export interface PaymentProviderSettings {
+  enabled: boolean;
+  provider: 'asaas' | 'mercadopago' | 'generic';
+  webhookSecret?: string;
+  /** E-mail remetente para régua (Resend) */
+  emailFrom?: string;
+}
+
 export type PixKeyType = 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
 
 /** Dados de pagamento usados na régua e no atendimento IA */
@@ -222,6 +240,8 @@ export interface PaymentIntegrationSettings {
 export interface CompanyIntegrations {
   whatsapp?: WhatsAppIntegrationSettings;
   payment?: PaymentIntegrationSettings;
+  billing?: BillingAutomationSettings;
+  paymentProvider?: PaymentProviderSettings;
 }
 
 export interface CompanySettings {

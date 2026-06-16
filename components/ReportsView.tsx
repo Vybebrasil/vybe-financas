@@ -12,6 +12,8 @@ import {
   getTransactionCashDate,
   getTransactionFilterDate,
 } from '../src/services/transactionDates';
+import { createPdfDocument, autoTable } from '../src/lib/pdf';
+import ClientMarginSection from './ClientMarginSection';
 import { Printer, TrendingUp, DollarSign, Percent, PieChart, BarChart3, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, AlertCircle, CheckCircle, Clock, Download, X, FileText, Users, UserPlus, UserMinus, Receipt } from 'lucide-react';
 
 interface ReportsViewProps {
@@ -352,15 +354,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
   };
 
   const handleExportPDF = () => {
-    // Access jsPDF from window object (loaded via CDN)
-    const win = window as any;
-    if (!win.jspdf) {
-      toast.info('Biblioteca PDF ainda carregando. Tente novamente em instantes.');
-      return;
-    }
-    
-    const { jsPDF } = win.jspdf;
-    const doc = new jsPDF();
+    const doc = createPdfDocument();
 
     // -- Header --
     doc.setFillColor(30, 30, 30); // Dark Gray
@@ -434,7 +428,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
     });
 
     // AutoTable Logic
-    (doc as any).autoTable({
+    autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
       startY: startY + 15,
@@ -715,6 +709,16 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
           </p>
         </div>
       </div>
+
+      <ClientMarginSection
+        clients={clients}
+        transactions={filteredTransactions}
+        range={
+          startDate && endDate
+            ? { startDate, endDate }
+            : undefined
+        }
+      />
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 print:block print:space-y-6">

@@ -26,6 +26,9 @@ import ReceiptModal from './ReceiptModal';
 import CompanySettingsModal from './CompanySettingsModal';
 import ConfirmDialog from './ConfirmDialog';
 import DelinquencyPanel from './DelinquencyPanel';
+import ReconciliationPanel from './ReconciliationPanel';
+import MonthCloseWizard from './MonthCloseWizard';
+import { AppTab } from '../src/context/AppDataContext';
 
 const ExpensesView = lazy(() => import('./ExpensesView'));
 const ContractsView = lazy(() => import('./ContractsView'));
@@ -41,6 +44,7 @@ const TabLoader: React.FC = () => (
 const AppShell: React.FC = () => {
   const {
     userEmail,
+    workspaceOwnerId,
     isLoadingData,
     activeTab,
     setActiveTab,
@@ -113,7 +117,21 @@ const AppShell: React.FC = () => {
     setIsHistoryModalOpen,
     setIsEmployeeModalOpen,
     setIsReceiptModalOpen,
+    fetchData,
+    monthlyBudgets,
+    periodClosures,
+    refreshBudgetsAndClosures,
+    handleSharePortalLink,
   } = useAppData();
+
+  const budgetMonthKey = new Date().toISOString().slice(0, 7);
+
+  const goToTab = (tab: AppTab) => {
+    if (tab === 'settings' && activeTab !== 'settings') {
+      setTabBeforeSettings(activeTab === 'settings' ? tabBeforeSettings : activeTab);
+    }
+    setActiveTab(tab);
+  };
 
   return (
     <div className="min-h-screen bg-vybe-bg pb-12 font-sans selection:bg-vybe-accent selection:text-white relative">
@@ -214,7 +232,7 @@ const AppShell: React.FC = () => {
                   if (activeTab !== 'settings') {
                     setTabBeforeSettings(activeTab);
                   }
-                  setActiveTab('settings');
+                  goToTab('settings');
                 }}
                 title="Configurações do sistema"
                 className={`p-2.5 rounded-full border transition-colors ${
@@ -243,7 +261,7 @@ const AppShell: React.FC = () => {
                 <button
                   key={id}
                   type="button"
-                  onClick={() => setActiveTab(id)}
+                  onClick={() => goToTab(id)}
                   className={`flex items-center gap-2 px-4 md:px-6 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
                     activeTab === id
                       ? 'bg-vybe-accent text-white shadow-lg'
@@ -268,6 +286,17 @@ const AppShell: React.FC = () => {
               clients={clients}
               transactions={transactions}
               onGenerateCharge={handleOpenBillingModal}
+            />
+            <MonthCloseWizard
+              transactions={transactions}
+              closures={periodClosures}
+              onClosed={() => void refreshBudgetsAndClosures()}
+            />
+            <ReconciliationPanel
+              transactions={transactions}
+              bankAccounts={bankAccounts}
+              onReconciled={() => void fetchData()}
+              onToggleStatus={handleToggleTransactionStatus}
             />
             <TransactionForm
               onAddTransaction={handleAddTransaction}
@@ -308,6 +337,7 @@ const AppShell: React.FC = () => {
               onEditClient={setEditingClient}
               onGenerateCharge={handleOpenBillingModal}
               onViewHistory={handleOpenHistory}
+              onSharePortalLink={(client) => void handleSharePortalLink(client)}
             />
           </div>
         )}
@@ -357,6 +387,7 @@ const AppShell: React.FC = () => {
             <SettingsView
               settings={companySettings}
               userEmail={userEmail}
+              workspaceOwnerId={workspaceOwnerId}
               bankAccounts={bankAccounts}
               transactions={transactions}
               onAddBankAccount={handleAddBankAccount}
@@ -365,7 +396,7 @@ const AppShell: React.FC = () => {
               onSave={handleUpdateCompanySettings}
               onPersistCategories={handlePersistCategories}
               onLogout={handleLogout}
-              onBack={() => setActiveTab(tabBeforeSettings)}
+              onBack={() => goToTab(tabBeforeSettings)}
               workspaceMembers={workspaceMembers}
               workspaceTeamActive={workspaceTeamActive}
               workspaceRole={workspaceRole}
@@ -375,6 +406,9 @@ const AppShell: React.FC = () => {
               onRemoveMember={handleRemoveMember}
               onUpdateMemberRole={handleUpdateMemberRole}
               onRefreshTeam={handleRefreshTeam}
+              monthlyBudgets={monthlyBudgets}
+              budgetMonthKey={budgetMonthKey}
+              onBudgetsSaved={() => void refreshBudgetsAndClosures()}
             />
           </Suspense>
         )}
