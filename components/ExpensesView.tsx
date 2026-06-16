@@ -2,20 +2,23 @@ import React, { useMemo, useState } from 'react';
 import { Employee, Subscription, Category, Transaction, TransactionType, TransactionStatus, PaymentMethod } from '../types';
 import { formatCurrency, generateId } from '../utils';
 import { computeEmployeeAmountToPay } from '../src/services/employeePayroll';
-import { getCurrentMonthKey } from '../src/services/recurringLogic';
-import { Users, Plus, Trash2, Laptop, ShoppingBag, DollarSign, Eye, Pencil, X, Save, History, Pin } from 'lucide-react';
+import { getCurrentMonthKey, salaryDescriptionForEmployee, todayIsoDate } from '../src/services/recurringLogic';
+import { Users, Plus, Trash2, Laptop, ShoppingBag, DollarSign, Eye, Pencil, X, Save, History, Pin, Ticket } from 'lucide-react';
 import SubscriptionHistoryModal from './SubscriptionHistoryModal';
+import EmployeeValeModal from './EmployeeValeModal';
+import { useToast } from './ToastProvider';
 
 interface ExpensesViewProps {
   employees: Employee[];
   subscriptions: Subscription[];
-  transactions?: Transaction[]; // Opcional para manter compatibilidade, mas idealmente obrigatório
+  transactions?: Transaction[];
   onAddEmployee: (emp: Employee) => void;
   onDeleteEmployee: (id: string) => void;
   onAddSubscription: (sub: Subscription) => void;
   onUpdateSubscription: (sub: Subscription) => void;
   onDeleteSubscription: (id: string) => void;
   onQuickExpense: (transaction: Transaction) => void;
+  onAddTransaction: (transaction: Transaction) => Promise<void>;
   onViewEmployee?: (emp: Employee) => void;
 }
 
@@ -29,8 +32,10 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   onUpdateSubscription,
   onDeleteSubscription,
   onQuickExpense,
+  onAddTransaction,
   onViewEmployee,
 }) => {
+  const toast = useToast();
   // State for forms
   const [newEmpName, setNewEmpName] = useState('');
   const [newEmpRole, setNewEmpRole] = useState('');
@@ -50,6 +55,8 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
 
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
+  const [valeEmployee, setValeEmployee] = useState<Employee | null>(null);
+  const [payingEmployeeId, setPayingEmployeeId] = useState<string | null>(null);
 
   const [variableDesc, setVariableDesc] = useState('');
   const [variableCost, setVariableCost] = useState('');
@@ -192,19 +199,56 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
     setFixedCost('');
   };
 
-  const handlePayEmployee = (emp: Employee) => {
+  const handlePayEmployee = async (emp: Employee) => {
     const { amountToPay } = computeEmployeeAmountToPay(emp, transactions);
-    onQuickExpense({
+    if (amountToPay <= 0) return;
+
+    setPayingEmployeeId(emp.id);
+    try {
+      await onAddTransaction({
+        id: generateId(),
+        description: salaryDescriptionForEmployee(emp.name),
+        amount: amountToPay,
+        category: Category.SALARY,
+        type: TransactionType.EXPENSE,
+        date: todayIsoDate(),
+        status: TransactionStatus.PAID,
+        paymentMethod: 'PIX',
+        employeeId: emp.id,
+      });
+      toast.success(`Pagamento de ${emp.name} registrado.`);
+    } catch {
+      toast.error('Erro ao registrar pagamento.');
+    } finally {
+      setPayingEmployeeId(null);
+    }
+  };
+
+  const handleRegisterVale = async (
+    payload: {
+      description: string;
+      amount: number;
+      date: string;
+      status: TransactionStatus;
+    },
+  ) => {
+    if (!valeEmployee) return;
+    await onAddTransaction({
       id: generateId(),
-      description: `Salário - ${emp.name}`,
-      amount: amountToPay,
-      category: Category.SALARY,
+      description: payload.description,
+      amount: payload.amount,
+      category: Category.EMPLOYEE_VOUCHER,
       type: TransactionType.EXPENSE,
-      date: new Date().toISOString().split('T')[0],
-      status: TransactionStatus.PAID,
+      date: payload.date,
+      status: payload.status,
       paymentMethod: 'PIX',
-      employeeId: emp.id,
+      employeeId: valeEmployee.id,
     });
+    toast.success(
+      payload.status === TransactionStatus.PENDING
+        ? 'Vale pendente registrado.'
+        : 'Vale registrado e descontado da folha.',
+    );
   };
 
   const handlePaySub = (sub: Subscription) => {
@@ -245,6 +289,18 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
         onClose={() => setViewingHistorySub(null)}
         subscription={viewingHistorySub}
         transactions={transactions}
+      />
+
+      <EmployeeValeModal
+        isOpen={!!valeEmployee}
+        employee={valeEmployee}
+        amountToPay={
+          valeEmployee
+            ? computeEmployeeAmountToPay(valeEmployee, transactions).amountToPay
+            : 0
+        }
+        onClose={() => setValeEmployee(null)}
+        onSubmit={handleRegisterVale}
       />
 
       {/* Modal: Novo Colaborador */}
@@ -414,8 +470,9 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                       {formatCurrency(payroll.amountToPay)}
                     </span>
                     {payroll.linkedExpenses > 0 && (
-                      <span className="block text-[10px] text-gray-600 mt-0.5">
-                        −{formatCurrency(payroll.linkedExpenses)} vinculadas
+                      <span className="block text-[10px] text-orange-400/90 mt-0.5" title={payroll.vales.map((v) => v.description).join(', ')}>
+                        −{formatCurrency(payroll.linkedExpenses)} em vales
+                        {payroll.vales.length > 1 ? ` (${payroll.vales.length})` : ''}
                       </span>
                     )}
                     {payroll.salaryPaid > 0 && (
@@ -432,12 +489,20 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                     )}
                     <button
                       type="button"
-                      onClick={() => handlePayEmployee(emp)}
-                      disabled={payroll.amountToPay <= 0}
+                      onClick={() => setValeEmployee(emp)}
+                      title="Registrar vale (transporte, refeição, adiantamento...)"
+                      className="p-2 bg-orange-900/20 text-orange-400 rounded hover:bg-orange-900/40 border border-orange-900/50 transition-colors"
+                    >
+                      <Ticket size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handlePayEmployee(emp)}
+                      disabled={payroll.amountToPay <= 0 || payingEmployeeId === emp.id}
                       title={
                         payroll.amountToPay <= 0
                           ? 'Salário do mês já quitado'
-                          : 'Lançar pagamento (valor A pagar)'
+                          : 'Registrar pagamento do salário (valor A pagar)'
                       }
                       className="p-2 bg-green-900/20 text-green-500 rounded hover:bg-green-900/40 border border-green-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >

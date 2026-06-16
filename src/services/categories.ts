@@ -18,6 +18,12 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
     locked: true,
   },
   {
+    id: 'cat-employee-voucher',
+    label: Category.EMPLOYEE_VOUCHER,
+    transactionType: TransactionType.EXPENSE,
+    locked: true,
+  },
+  {
     id: 'cat-tools',
     label: Category.TOOLS,
     transactionType: TransactionType.EXPENSE,
@@ -109,6 +115,7 @@ const CHART_PALETTE = [
 export function getCategoryChartColor(label: string, index: number): string {
   const defaults: Record<string, string> = {
     [Category.SALARY]: '#EF4444',
+    [Category.EMPLOYEE_VOUCHER]: '#F97316',
     [Category.ADS]: '#F59E0B',
     [Category.TOOLS]: '#3B82F6',
     [Category.SUPPLIES]: '#10B981',

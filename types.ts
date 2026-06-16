@@ -18,6 +18,8 @@ export enum Category {
   SUPPLIES = 'Insumos/Escritório', // legado — preferir VARIABLE_EXPENSE
   VARIABLE_EXPENSE = 'Gastos Variáveis',
   FIXED_EXPENSE = 'Gastos Fixos',
+  /** Vale transporte, refeição, adiantamento — desconta da folha do colaborador */
+  EMPLOYEE_VOUCHER = 'Vale (colaborador)',
 }
 
 export type PaymentMethod = 'PIX' | 'BOLETO' | 'CARTAO' | 'DINHEIRO' | 'OUTRO';

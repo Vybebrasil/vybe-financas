@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Employee, Transaction, TransactionType } from '../types';
+import { Employee, Transaction, TransactionType, Category } from '../types';
 import { formatCurrency, formatDate } from '../utils';
-import { computeEmployeeAmountToPay } from '../src/services/employeePayroll';
+import { computeEmployeeAmountToPay, isPayrollDeduction } from '../src/services/employeePayroll';
+import { getCurrentMonthKey } from '../src/services/recurringLogic';
+import { getTransactionFilterDate } from '../src/services/transactionDates';
 import { X, User, Save, Edit2, FileText, DollarSign, Calendar, CreditCard, TrendingDown } from 'lucide-react';
 
 interface EmployeeDetailsModalProps {
@@ -30,12 +32,24 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
     }
   }, [employee]);
 
-  // Filter Transactions for History
+  // Histórico do colaborador (mês atual na folha; geral na tabela)
+  const monthKey = getCurrentMonthKey();
+
+  const monthVales = useMemo(() => {
+    if (!employee) return [];
+    return transactions.filter((t) => isPayrollDeduction(t, employee.id, monthKey));
+  }, [employee, transactions, monthKey]);
+
   const history = useMemo(() => {
     if (!employee) return [];
-    return transactions.filter(
-      (t) => t.type === TransactionType.EXPENSE && t.employeeId === employee.id,
-    );
+    return transactions
+      .filter(
+        (t) =>
+          t.type === TransactionType.EXPENSE &&
+          t.employeeId === employee.id &&
+          t.category === Category.SALARY,
+      )
+      .sort((a, b) => getTransactionFilterDate(b).localeCompare(getTransactionFilterDate(a)));
   }, [employee, transactions]);
 
   const totalPaid = useMemo(() => {
@@ -176,9 +190,18 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                             {payroll && (
                               <div className="bg-[#1E1E1E] rounded-lg border border-amber-900/30 p-3 space-y-1">
                                 <div className="flex justify-between text-xs">
-                                  <span className="text-gray-500">Despesas vinculadas (mês)</span>
-                                  <span className="text-gray-300">− {formatCurrency(payroll.linkedExpenses)}</span>
+                                  <span className="text-gray-500">Vales do mês (pagos)</span>
+                                  <span className="text-orange-400/90">− {formatCurrency(payroll.linkedExpenses)}</span>
                                 </div>
+                                {monthVales.length > 0 && (
+                                  <ul className="text-[10px] text-gray-600 space-y-0.5 pl-1 border-l border-gray-700 ml-1">
+                                    {monthVales.map((v) => (
+                                      <li key={v.id} className="truncate">
+                                        {v.description} · {formatCurrency(v.amount)}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
                                 {payroll.salaryPaid > 0 && (
                                   <div className="flex justify-between text-xs">
                                     <span className="text-gray-500">Salário pago (mês)</span>
@@ -261,7 +284,7 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                     <div className="bg-[#121212] rounded-xl border border-gray-800 h-full flex flex-col">
                         <div className="p-5 border-b border-gray-800 flex justify-between items-center">
                             <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                                <TrendingDown size={16} className="text-vybe-red" /> Histórico de Pagamentos
+                                <TrendingDown size={16} className="text-vybe-red" /> Pagamentos de salário
                             </h4>
                             <div className="text-xs">
                                 <span className="text-gray-500">Total Pago: </span>
@@ -273,7 +296,7 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                             {history.length === 0 ? (
                                 <div className="h-48 flex flex-col items-center justify-center text-gray-500">
                                     <p className="text-sm">Nenhum pagamento registrado.</p>
-                                    <p className="text-xs mt-1">Lance o salário na aba "Despesas" para aparecer aqui.</p>
+                                    <p className="text-xs mt-1">Registre vales em Despesas ou pague o salário pelo botão $.</p>
                                 </div>
                             ) : (
                                 <table className="w-full text-left border-collapse">
@@ -300,7 +323,7 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                         </div>
                         <div className="p-3 border-t border-gray-800 bg-[#1E1E1E] rounded-b-xl">
                             <p className="text-[10px] text-gray-500 text-center">
-                                Histórico de despesas vinculadas a este colaborador.
+                                Vales do mês aparecem no painel à esquerda. Aqui: salários pagos.
                             </p>
                         </div>
                     </div>

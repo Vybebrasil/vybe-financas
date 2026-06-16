@@ -367,6 +367,7 @@ const AppShell: React.FC = () => {
               onUpdateSubscription={handleUpdateSubscription}
               onDeleteSubscription={handleDeleteSubscription}
               onQuickExpense={handleQuickExpense}
+              onAddTransaction={handleAddTransaction}
               onViewEmployee={handleOpenEmployeeDetails}
             />
           </Suspense>

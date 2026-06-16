@@ -117,6 +117,28 @@ describe('employeePayroll', () => {
     expect(result.amountToPay).toBe(3500);
   });
 
+  it('não desconta vale pendente da folha', () => {
+    const result = computeEmployeeAmountToPay(
+      employee,
+      [
+        {
+          id: '1',
+          description: 'Vale transporte - Ana Silva',
+          amount: 200,
+          type: TransactionType.EXPENSE,
+          category: Category.EMPLOYEE_VOUCHER,
+          date: '2026-05-10',
+          status: TransactionStatus.PENDING,
+          paymentMethod: 'PIX',
+          employeeId: 'e1',
+        },
+      ],
+      '2026-05',
+    );
+    expect(result.linkedExpenses).toBe(0);
+    expect(result.amountToPay).toBe(3500);
+  });
+
   it('não conta lançamento de salário como despesa vinculada', () => {
     const linked = getEmployeeLinkedTransactions(
       employee,
