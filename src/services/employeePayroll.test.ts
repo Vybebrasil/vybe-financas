@@ -139,6 +139,29 @@ describe('employeePayroll', () => {
     expect(result.amountToPay).toBe(3500);
   });
 
+  it('suporta pagamentos parciais de salário', () => {
+    const month = '2026-05';
+    const afterPartial = computeEmployeeAmountToPay(
+      { ...employee, salary: 3000, bonus: 0 },
+      [
+        {
+          id: '1',
+          description: 'Salário (parcial) - Ana Silva',
+          amount: 1200,
+          type: TransactionType.EXPENSE,
+          category: Category.SALARY,
+          date: '2026-05-05',
+          status: TransactionStatus.PAID,
+          paymentMethod: 'PIX',
+          employeeId: 'e1',
+        },
+      ],
+      month,
+    );
+    expect(afterPartial.salaryPaid).toBe(1200);
+    expect(afterPartial.amountToPay).toBe(1800);
+  });
+
   it('não conta lançamento de salário como despesa vinculada', () => {
     const linked = getEmployeeLinkedTransactions(
       employee,

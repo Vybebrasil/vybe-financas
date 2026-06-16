@@ -11,6 +11,9 @@ import {
 export const salaryDescriptionForEmployee = (name: string): string =>
   `Salário - ${name}`;
 
+export const salaryPartialDescriptionForEmployee = (name: string): string =>
+  `Salário (parcial) - ${name}`;
+
 export const subscriptionDescriptionFor = (name: string): string =>
   `Assinatura - ${name}`;
 

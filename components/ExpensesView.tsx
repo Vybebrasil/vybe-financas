@@ -2,10 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { Employee, Subscription, Category, Transaction, TransactionType, TransactionStatus, PaymentMethod } from '../types';
 import { formatCurrency, generateId } from '../utils';
 import { computeEmployeeAmountToPay } from '../src/services/employeePayroll';
-import { getCurrentMonthKey, salaryDescriptionForEmployee, todayIsoDate } from '../src/services/recurringLogic';
+import { getCurrentMonthKey, salaryPartialDescriptionForEmployee, salaryDescriptionForEmployee } from '../src/services/recurringLogic';
 import { Users, Plus, Trash2, Laptop, ShoppingBag, DollarSign, Eye, Pencil, X, Save, History, Pin, Ticket } from 'lucide-react';
 import SubscriptionHistoryModal from './SubscriptionHistoryModal';
 import EmployeeValeModal from './EmployeeValeModal';
+import EmployeeSalaryPayModal from './EmployeeSalaryPayModal';
 import { useToast } from './ToastProvider';
 
 interface ExpensesViewProps {
@@ -56,6 +57,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [valeEmployee, setValeEmployee] = useState<Employee | null>(null);
+  const [payEmployee, setPayEmployee] = useState<Employee | null>(null);
   const [payingEmployeeId, setPayingEmployeeId] = useState<string | null>(null);
 
   const [variableDesc, setVariableDesc] = useState('');
@@ -199,26 +201,40 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
     setFixedCost('');
   };
 
-  const handlePayEmployee = async (emp: Employee) => {
-    const { amountToPay } = computeEmployeeAmountToPay(emp, transactions);
-    if (amountToPay <= 0) return;
-
+  const handlePayEmployeeSubmit = async (
+    emp: Employee,
+    payload: {
+      amount: number;
+      date: string;
+      status: TransactionStatus;
+      isPartial: boolean;
+    },
+  ) => {
     setPayingEmployeeId(emp.id);
     try {
       await onAddTransaction({
         id: generateId(),
-        description: salaryDescriptionForEmployee(emp.name),
-        amount: amountToPay,
+        description: payload.isPartial
+          ? salaryPartialDescriptionForEmployee(emp.name)
+          : salaryDescriptionForEmployee(emp.name),
+        amount: payload.amount,
         category: Category.SALARY,
         type: TransactionType.EXPENSE,
-        date: todayIsoDate(),
-        status: TransactionStatus.PAID,
+        date: payload.date,
+        status: payload.status,
         paymentMethod: 'PIX',
         employeeId: emp.id,
       });
-      toast.success(`Pagamento de ${emp.name} registrado.`);
+      toast.success(
+        payload.status === TransactionStatus.PENDING
+          ? 'Pagamento pendente registrado.'
+          : payload.isPartial
+            ? `Pagamento parcial de ${emp.name} registrado.`
+            : `Pagamento de ${emp.name} registrado.`,
+      );
     } catch {
       toast.error('Erro ao registrar pagamento.');
+      throw new Error('pay failed');
     } finally {
       setPayingEmployeeId(null);
     }
@@ -301,6 +317,16 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
         }
         onClose={() => setValeEmployee(null)}
         onSubmit={handleRegisterVale}
+      />
+
+      <EmployeeSalaryPayModal
+        isOpen={!!payEmployee}
+        employee={payEmployee}
+        payroll={
+          payEmployee ? computeEmployeeAmountToPay(payEmployee, transactions) : null
+        }
+        onClose={() => setPayEmployee(null)}
+        onSubmit={(payload) => handlePayEmployeeSubmit(payEmployee!, payload)}
       />
 
       {/* Modal: Novo Colaborador */}
@@ -497,12 +523,12 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => void handlePayEmployee(emp)}
+                      onClick={() => setPayEmployee(emp)}
                       disabled={payroll.amountToPay <= 0 || payingEmployeeId === emp.id}
                       title={
                         payroll.amountToPay <= 0
                           ? 'Salário do mês já quitado'
-                          : 'Registrar pagamento do salário (valor A pagar)'
+                          : 'Pagar salário (total ou parcial)'
                       }
                       className="p-2 bg-green-900/20 text-green-500 rounded hover:bg-green-900/40 border border-green-900/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
