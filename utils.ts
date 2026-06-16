@@ -1,4 +1,5 @@
 import { Transaction, TransactionType, TransactionStatus, Client, ChartDataPoint, ChartPeriod } from './types';
+import { getTransactionFilterDate } from './src/services/transactionDates';
 
 const addToChartPoint = (point: ChartDataPoint, t: Transaction) => {
   const isPaid = t.status === TransactionStatus.PAID;
@@ -77,7 +78,8 @@ export const getChartData = (transactions: Transaction[], period: ChartPeriod, t
     }
 
     transactions.forEach(t => {
-      const point = data.find(p => p.key === t.date);
+      const filterDate = getTransactionFilterDate(t);
+      const point = data.find(p => p.key === filterDate);
       if (point) addToChartPoint(point, t);
     });
 
@@ -93,8 +95,9 @@ export const getChartData = (transactions: Transaction[], period: ChartPeriod, t
     }
 
     transactions.forEach(t => {
-      const tYear = parseInt(t.date.split('-')[0]);
-      const tMonth = t.date.substring(0, 7);
+      const filterDate = getTransactionFilterDate(t);
+      const tYear = parseInt(filterDate.split('-')[0]);
+      const tMonth = filterDate.substring(0, 7);
       const point = data.find(p => p.key === tMonth);
       if (point && tYear === targetYear) addToChartPoint(point, t);
     });
@@ -105,7 +108,10 @@ export const getChartData = (transactions: Transaction[], period: ChartPeriod, t
     const currentYear = String(today.getFullYear());
     years.add(currentYear);
     
-    transactions.forEach(t => years.add(t.date.substring(0, 4)));
+    transactions.forEach(t => {
+      years.add(getTransactionFilterDate(t).substring(0, 4));
+      if (t.paidDate) years.add(t.paidDate.substring(0, 4));
+    });
     
     const sortedYears = Array.from(years).sort();
 
@@ -114,7 +120,7 @@ export const getChartData = (transactions: Transaction[], period: ChartPeriod, t
     });
 
     transactions.forEach(t => {
-      const tYear = t.date.substring(0, 4);
+      const tYear = getTransactionFilterDate(t).substring(0, 4);
       const point = data.find(p => p.key === tYear);
       if (point) addToChartPoint(point, t);
     });

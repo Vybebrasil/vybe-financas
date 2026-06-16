@@ -1,8 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType, Category, Client, PaymentMethod, TransactionStatus, BankAccount } from '../types';
 import { getCategoryLabels } from '../src/services/categories';
+import {
+  getTransactionFilterDate,
+  getTransactionScheduledDate,
+} from '../src/services/transactionDates';
 import { formatCurrency, formatDate } from '../utils';
 import { Trash2, TrendingUp, TrendingDown, Calendar, Tag, Filter, XCircle, FileText, Briefcase, QrCode, CreditCard, Barcode, Banknote, CheckCircle, Clock, Paperclip, Pencil } from 'lucide-react';
+import SettlementDateModal from './SettlementDateModal';
 
 interface TransactionListProps {
   transactions: Transaction[];
@@ -12,7 +17,7 @@ interface TransactionListProps {
   onDeleteTransaction: (id: string) => void;
   onEditTransaction?: (transaction: Transaction) => void;
   onGenerateReceipt?: (transaction: Transaction) => void;
-  onToggleStatus: (id: string) => void;
+  onToggleStatus: (id: string, paidDate?: string) => void;
 }
 
 const TransactionList: React.FC<TransactionListProps> = ({
@@ -31,6 +36,21 @@ const TransactionList: React.FC<TransactionListProps> = ({
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterBankAccount, setFilterBankAccount] = useState<string>('all');
   const [filterType, setFilterType] = useState<'all' | TransactionType>('all');
+  const [settlingTransaction, setSettlingTransaction] = useState<Transaction | null>(null);
+
+  const handleStatusClick = (transaction: Transaction) => {
+    if (transaction.status === TransactionStatus.PENDING) {
+      setSettlingTransaction(transaction);
+      return;
+    }
+    onToggleStatus(transaction.id);
+  };
+
+  const handleConfirmSettlement = (paidDate: string) => {
+    if (!settlingTransaction) return;
+    onToggleStatus(settlingTransaction.id, paidDate);
+    setSettlingTransaction(null);
+  };
 
   const categoriesForFilter = useMemo(() => {
     const base = categoryLabels ?? getCategoryLabels();
@@ -40,7 +60,9 @@ const TransactionList: React.FC<TransactionListProps> = ({
 
   // Gerar lista de anos disponíveis baseada nas transações + ano atual
   const availableYears = useMemo(() => {
-    const years = new Set(transactions.map(t => t.date.split('-')[0]));
+    const years = new Set(
+      transactions.map((t) => getTransactionFilterDate(t).split('-')[0]),
+    );
     years.add(String(new Date().getFullYear()));
     return Array.from(years).sort((a, b) => Number(b) - Number(a));
   }, [transactions]);
@@ -63,7 +85,8 @@ const TransactionList: React.FC<TransactionListProps> = ({
   // Lógica de Filtragem
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
-      const [tYear, tMonth] = t.date.split('-'); // YYYY-MM-DD
+      const filterDate = getTransactionFilterDate(t);
+      const [tYear, tMonth] = filterDate.split('-'); // YYYY-MM-DD
 
       const matchYear = filterYear === 'all' || tYear === filterYear;
       // tMonth vem como "01", "10". Convertemos para index (0-11) para comparar
@@ -127,6 +150,11 @@ const TransactionList: React.FC<TransactionListProps> = ({
 
   return (
     <div className="bg-vybe-card rounded-xl border border-gray-800 shadow-lg overflow-hidden flex flex-col">
+      <SettlementDateModal
+        transaction={settlingTransaction}
+        onClose={() => setSettlingTransaction(null)}
+        onConfirm={handleConfirmSettlement}
+      />
       <div className="p-6 border-b border-gray-800">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -244,6 +272,12 @@ const TransactionList: React.FC<TransactionListProps> = ({
             <tbody>
               {filteredTransactions.map((transaction) => {
                 const client = transaction.clientId ? clients.find(c => c.id === transaction.clientId) : null;
+                const displayDate = getTransactionFilterDate(transaction);
+                const scheduledDate = getTransactionScheduledDate(transaction);
+                const showScheduledHint =
+                  transaction.status === TransactionStatus.PAID &&
+                  transaction.paidDate &&
+                  transaction.paidDate !== scheduledDate;
 
                 return (
                   <tr
@@ -281,7 +315,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onToggleStatus(transaction.id);
+                                handleStatusClick(transaction);
                               }}
                               className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border font-bold transition-all ${getStatusClasses(transaction.status)}`}
                             >
@@ -303,7 +337,10 @@ const TransactionList: React.FC<TransactionListProps> = ({
 
                           {/* Data Tag (Visible on Mobile < sm) */}
                           <div className="sm:hidden flex items-center gap-1 text-[10px] text-gray-500">
-                            <Calendar size={10} className="shrink-0" /> <span>{formatDate(transaction.date)}</span>
+                            <Calendar size={10} className="shrink-0" />
+                            <span title={showScheduledHint ? `Previsto: ${formatDate(scheduledDate)}` : undefined}>
+                              {formatDate(displayDate)}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -342,14 +379,16 @@ const TransactionList: React.FC<TransactionListProps> = ({
                     </td>
 
                     <td className="px-2 py-2.5 hidden sm:table-cell text-[11px] text-gray-400 align-middle whitespace-nowrap tabular-nums">
-                      {formatDate(transaction.date)}
+                      <span title={showScheduledHint ? `Previsto: ${formatDate(scheduledDate)}` : undefined}>
+                        {formatDate(displayDate)}
+                      </span>
                     </td>
 
                     <td className="px-1 py-2.5 hidden md:table-cell text-center align-middle">
                       <button
-                        onClick={() => onToggleStatus(transaction.id)}
+                        onClick={() => handleStatusClick(transaction)}
                         className={`inline-flex items-center justify-center p-1 rounded-md border transition-all ${getStatusClasses(transaction.status)}`}
-                        title={transaction.status === TransactionStatus.PAID ? 'Pago — clique para pendente' : 'Pendente — clique para pago'}
+                        title={transaction.status === TransactionStatus.PAID ? 'Pago — clique para pendente' : 'Pendente — clique para dar baixa'}
                       >
                         {transaction.status === TransactionStatus.PAID ? (
                           <CheckCircle size={14} />

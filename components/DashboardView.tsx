@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useAppData } from '../src/context/AppDataContext';
 import { formatCurrency, formatDate } from '../utils';
+import { getTransactionFilterDate } from '../src/services/transactionDates';
 import DashboardCard from './DashboardCard';
 import FinancialChart from './FinancialChart';
 import {
@@ -495,7 +496,7 @@ const DashboardView: React.FC = () => {
                       <span className="text-gray-300 truncate pr-2">{t.description}</span>
                       <span className="text-amber-400 shrink-0">{formatCurrency(t.amount)}</span>
                     </button>
-                    <p className="text-[10px] text-gray-600 px-2">{formatDate(t.date)}</p>
+                    <p className="text-[10px] text-gray-600 px-2">{formatDate(getTransactionFilterDate(t))}</p>
                   </li>
                 ))}
               </ul>

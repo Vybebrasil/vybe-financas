@@ -51,6 +51,7 @@ const mapTransactionFromDB = (data: Record<string, unknown>): Transaction => ({
   type: data.type as TransactionType,
   category: data.category as Category,
   date: data.date as string,
+  paidDate: data.paid_date ? String(data.paid_date).slice(0, 10) : undefined,
   status: data.status as TransactionStatus,
   clientId: (data.client_id as string) || undefined,
   employeeId: (data.employee_id as string) || undefined,
@@ -67,6 +68,7 @@ const mapTransactionToDB = (t: Omit<Transaction, 'id'> | Transaction, userId: st
     type: t.type,
     category: t.category,
     date: t.date,
+    paid_date: t.paidDate || null,
     status: t.status,
     client_id: t.clientId || null,
     employee_id: t.employeeId || null,
@@ -398,11 +400,22 @@ export const api = {
       if (error) throw error;
     },
 
-    async updateStatus(id: string, newStatus: TransactionStatus) {
+    async updateStatus(
+      id: string,
+      newStatus: TransactionStatus,
+      paidDate?: string | null,
+    ) {
       const { user, ownerId } = await requireWorkspace();
+      const patch: Record<string, unknown> = { status: newStatus };
+      if (newStatus === TransactionStatus.PAID && paidDate) {
+        patch.paid_date = paidDate;
+      } else if (newStatus === TransactionStatus.PENDING) {
+        patch.paid_date = null;
+      }
+
       const { error } = await supabase
         .from('transactions')
-        .update({ status: newStatus })
+        .update(patch)
         .eq('id', id)
         .eq('user_id', ownerId);
 

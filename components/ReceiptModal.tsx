@@ -1,6 +1,7 @@
 import React from 'react';
 import { Transaction, TransactionType, Client, CompanySettings } from '../types';
 import { formatCurrency, formatDate } from '../utils';
+import { getTransactionCashDate } from '../src/services/transactionDates';
 import { X, Printer, FileCheck, Download } from 'lucide-react';
 import { useToast } from './ToastProvider';
 
@@ -90,7 +91,7 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
     doc.setFontSize(14);
     doc.setTextColor(0, 0, 0);
     doc.setFont("helvetica", "bold");
-    doc.text(formatDate(transaction.date), pageWidth - margin, yPos + 19, { align: 'right' });
+    doc.text(formatDate(getTransactionCashDate(transaction)), pageWidth - margin, yPos + 19, { align: 'right' });
 
     // Forma de Pagamento
     yPos += 25;
@@ -247,7 +248,7 @@ const ReceiptModal: React.FC<ReceiptModalProps> = ({ isOpen, onClose, transactio
                         </div>
                         <div className="text-right">
                             <span className="text-sm text-gray-500 block">Data do Pagamento</span>
-                            <span className="text-xl font-bold">{formatDate(transaction.date)}</span>
+                            <span className="text-xl font-bold">{formatDate(getTransactionCashDate(transaction))}</span>
                             {transaction.paymentMethod && (
                                 <span className="text-xs text-gray-500 block mt-1 uppercase">Via {transaction.paymentMethod}</span>
                             )}

@@ -6,6 +6,7 @@ import {
   TransactionType,
 } from '../types';
 import { formatCurrency } from '../utils';
+import { getTransactionCashDate, getTransactionFilterDate } from '../src/services/transactionDates';
 import { LineChart } from 'lucide-react';
 
 interface FinancialChartProps {
@@ -71,7 +72,7 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
     if (transactions.length === 0) return [] as MonthlyPoint[];
 
     const txDates = transactions
-      .map((t) => new Date(`${t.date.split('T')[0]}T12:00:00`))
+      .map((t) => new Date(`${getTransactionFilterDate(t)}T12:00:00`))
       .filter((d) => !Number.isNaN(d.getTime()));
 
     if (txDates.length === 0) return [] as MonthlyPoint[];
@@ -108,11 +109,11 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ transactions }) => {
     });
 
     transactions.forEach((t) => {
-      const key = t.date.split('T')[0].slice(0, 7);
+      const isPaid = t.status === TransactionStatus.PAID;
+      const key = (isPaid ? getTransactionCashDate(t) : t.date.split('T')[0]).slice(0, 7);
       const point = monthMap.get(key);
       if (!point) return;
 
-      const isPaid = t.status === TransactionStatus.PAID;
       const amount = Number(t.amount) || 0;
 
       if (t.type === TransactionType.INCOME) {

@@ -106,7 +106,7 @@ export interface AppDataContextValue {
   handleDeleteTransaction: (id: string) => void;
   handleUpdateTransaction: (transaction: Transaction) => Promise<void>;
   handleEditTransaction: (transaction: Transaction) => void;
-  handleToggleTransactionStatus: (id: string) => Promise<void>;
+  handleToggleTransactionStatus: (id: string, paidDate?: string) => Promise<void>;
   handleAddClient: (client: Client) => Promise<void>;
   handleUpdateClient: (updatedClient: Client) => Promise<void>;
   handleDeleteClient: (id: string) => void;
@@ -536,7 +536,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleToggleTransactionStatus = async (id: string) => {
+  const handleToggleTransactionStatus = async (id: string, paidDate?: string) => {
     const transaction = transactions.find((t) => t.id === id);
     if (!transaction) return;
 
@@ -545,15 +545,28 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
         ? TransactionStatus.PENDING
         : TransactionStatus.PAID;
 
+    const nextPaidDate =
+      newStatus === TransactionStatus.PAID ? paidDate : undefined;
+
     setTransactions((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status: newStatus } : t)),
+      prev.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              status: newStatus,
+              paidDate: nextPaidDate,
+            }
+          : t,
+      ),
     );
 
     try {
-      await api.transactions.updateStatus(id, newStatus);
+      await api.transactions.updateStatus(id, newStatus, nextPaidDate ?? null);
       await recordAudit(
         'transaction.status',
-        `${transaction.description}: ${newStatus === TransactionStatus.PAID ? 'pago' : 'pendente'}`,
+        newStatus === TransactionStatus.PAID
+          ? `${transaction.description}: pago em ${paidDate ?? transaction.date}`
+          : `${transaction.description}: pendente`,
         'transaction',
         id,
       );
@@ -561,7 +574,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       console.error(error);
       toast.error('Erro ao atualizar status.');
       setTransactions((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, status: transaction.status } : t)),
+        prev.map((t) => (t.id === id ? { ...t, status: transaction.status, paidDate: transaction.paidDate } : t)),
       );
     }
   };

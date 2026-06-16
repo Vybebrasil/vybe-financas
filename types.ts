@@ -29,6 +29,8 @@ export interface Transaction {
   type: TransactionType;
   category: string;
   date: string;
+  /** Data real do pagamento/recebimento (preenchida ao dar baixa em pendente). */
+  paidDate?: string;
   status: TransactionStatus;
   clientId?: string; // Centro de Custo / Cliente vinculado
   employeeId?: string; // Colaborador vinculado (despesas)

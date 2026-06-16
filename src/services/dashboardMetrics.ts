@@ -17,6 +17,7 @@ import {
   shiftMonthKey,
   subscriptionDescriptionFor,
 } from './recurringLogic';
+import { getTransactionCashDate, getTransactionFilterDate } from './transactionDates';
 
 export type DashboardPeriodPreset = 'this_month' | 'last_month' | 'calendar_year';
 
@@ -115,8 +116,12 @@ export function getPeriodRange(
 export function getTransactionYears(transactions: Transaction[], ref = new Date()): number[] {
   const years = new Set<number>([ref.getFullYear()]);
   for (const t of transactions) {
-    const y = parseInt(t.date.split('T')[0].slice(0, 4), 10);
+    const y = parseInt(getTransactionFilterDate(t).slice(0, 4), 10);
     if (!Number.isNaN(y)) years.add(y);
+    if (t.paidDate) {
+      const py = parseInt(t.paidDate.slice(0, 4), 10);
+      if (!Number.isNaN(py)) years.add(py);
+    }
   }
   return [...years].sort((a, b) => b - a);
 }
@@ -357,7 +362,7 @@ export function filterTransactionsByRange(
   endDate: string,
 ): Transaction[] {
   return transactions.filter((t) => {
-    const d = t.date.split('T')[0];
+    const d = getTransactionFilterDate(t);
     return d >= startDate && d <= endDate;
   });
 }
@@ -437,7 +442,7 @@ export function computeMrrVsReceived(
       if (t.type !== TransactionType.INCOME) return false;
       if (t.status !== TransactionStatus.PAID) return false;
       if (!isClientPaymentCategory(t.category)) return false;
-      const d = t.date.split('T')[0];
+      const d = getTransactionCashDate(t);
       if (singleMonth) return d.startsWith(monthKey);
       return d >= range.startDate && d <= range.endDate;
     })
@@ -635,7 +640,7 @@ function buildRecurringExpenseEntries<T>(params: {
         status: 'paid' as const,
         amount: paidTx.amount,
         transactionId: paidTx.id,
-        paymentDate: paidTx.date.split('T')[0],
+        paymentDate: getTransactionCashDate(paidTx),
       };
     }
 

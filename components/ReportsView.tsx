@@ -8,6 +8,10 @@ import {
   isClientPaymentCategory,
 } from '../src/services/categories';
 import { formatCurrency, formatDate } from '../utils';
+import {
+  getTransactionCashDate,
+  getTransactionFilterDate,
+} from '../src/services/transactionDates';
 import { Printer, TrendingUp, DollarSign, Percent, PieChart, BarChart3, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, AlertCircle, CheckCircle, Clock, Download, X, FileText, Users, UserPlus, UserMinus, Receipt } from 'lucide-react';
 
 interface ReportsViewProps {
@@ -54,8 +58,9 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
       // 1. Date Range
-      if (startDate && t.date < startDate) return false;
-      if (endDate && t.date > endDate) return false;
+      const filterDate = getTransactionFilterDate(t);
+      if (startDate && filterDate < startDate) return false;
+      if (endDate && filterDate > endDate) return false;
 
       if (selectedBankAccount !== 'all') {
         if (selectedBankAccount === 'none') {
@@ -105,8 +110,8 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
   // --- SORT LOGIC ---
   const sortedTransactions = useMemo(() => {
     return [...filteredTransactions].sort((a, b) => {
-      let valA: any = a[sortKey];
-      let valB: any = b[sortKey];
+      let valA: string | number = sortKey === 'date' ? getTransactionFilterDate(a) : a[sortKey];
+      let valB: string | number = sortKey === 'date' ? getTransactionFilterDate(b) : b[sortKey];
 
       if (sortKey === 'amount') {
           valA = a.amount;
@@ -173,7 +178,8 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
       let latest: string | null = null;
       transactions.forEach((t) => {
         if (!matchesClientPayment(client, t)) return;
-        const day = t.date.slice(0, 10);
+        if (t.status !== TransactionStatus.PAID) return;
+        const day = getTransactionCashDate(t);
         if (!latest || day > latest) latest = day;
       });
       return latest;
@@ -257,7 +263,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
       const income = filteredTransactions
         .filter(
           (t) =>
-            t.date.startsWith(key) &&
+            getTransactionCashDate(t).startsWith(key) &&
             t.type === TransactionType.INCOME &&
             t.status === TransactionStatus.PAID,
         )
@@ -266,7 +272,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
       const expense = filteredTransactions
         .filter(
           (t) =>
-            t.date.startsWith(key) &&
+            getTransactionCashDate(t).startsWith(key) &&
             t.type === TransactionType.EXPENSE &&
             t.status === TransactionStatus.PAID,
         )
@@ -314,7 +320,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
         
         // Escape quotes and format columns
         return [
-            formatDate(t.date),
+            formatDate(getTransactionFilterDate(t)),
             `"${t.description.replace(/"/g, '""')}"`,
             `"${t.category}"`,
             `"${clientName}"`,
@@ -417,7 +423,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
       const statusLabel = t.status === TransactionStatus.PAID ? 'Pago' : 'Pendente';
       
       const rowData = [
-        formatDate(t.date),
+        formatDate(getTransactionFilterDate(t)),
         t.description,
         t.category,
         typeLabel,
@@ -830,7 +836,7 @@ const ReportsView: React.FC<ReportsViewProps> = ({ transactions, clients, compan
                                     )}
                                 </td>
                                 <td className="p-4 text-xs text-gray-400 hidden md:table-cell">{t.category}</td>
-                                <td className="p-4 text-xs text-gray-400 font-mono hidden sm:table-cell">{formatDate(t.date)}</td>
+                                <td className="p-4 text-xs text-gray-400 font-mono hidden sm:table-cell">{formatDate(getTransactionFilterDate(t))}</td>
                             </tr>
                          );
                     })
