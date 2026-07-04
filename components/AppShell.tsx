@@ -14,8 +14,10 @@ import {
 import { useAppData } from '../src/context/AppDataContext';
 import { DEFAULT_SERVICE_PLANS, DEFAULT_MESSAGE_TEMPLATES } from '../constants';
 import { getCategoryLabels } from '../src/services/categories';
+import { tabToPath } from '../src/navigation/tabRoutes';
 import DashboardView from './DashboardView';
 import TransactionForm from './TransactionForm';
+import TransferForm from './TransferForm';
 import TransactionList from './TransactionList';
 import ClientForm from './ClientForm';
 import ClientList from './ClientList';
@@ -29,6 +31,7 @@ import DelinquencyPanel from './DelinquencyPanel';
 import ReconciliationPanel from './ReconciliationPanel';
 import MonthCloseWizard from './MonthCloseWizard';
 import { AppTab } from '../src/context/AppDataContext';
+import { TransactionType } from '../types';
 
 const ExpensesView = lazy(() => import('./ExpensesView'));
 const ContractsView = lazy(() => import('./ContractsView'));
@@ -130,6 +133,13 @@ const AppShell: React.FC = () => {
     if (tab === 'settings' && activeTab !== 'settings') {
       setTabBeforeSettings(activeTab === 'settings' ? tabBeforeSettings : activeTab);
     }
+    // Workaround: em produção, alguns casos ficam "presos" na rota /configuracoes.
+    // Forçar troca via reload evita ficar com a UI dessincronizada da rota.
+    if (activeTab === 'settings' && tab !== 'settings') {
+      window.location.assign(tabToPath(tab));
+      return;
+    }
+
     setActiveTab(tab);
   };
 
@@ -298,17 +308,28 @@ const AppShell: React.FC = () => {
               onReconciled={() => void fetchData()}
               onToggleStatus={handleToggleTransactionStatus}
             />
-            <TransactionForm
-              onAddTransaction={handleAddTransaction}
-              onUpdateTransaction={handleUpdateTransaction}
-              editingTransaction={editingTransaction}
-              onCancelEdit={() => setEditingTransaction(null)}
-              initialData={preFilledTransaction}
-              clients={clients}
-              employees={employees}
+            <TransferForm
               bankAccounts={bankAccounts}
-              companySettings={companySettings}
+              onAddTransfer={handleAddTransaction}
+              onUpdateTransfer={handleUpdateTransaction}
+              editingTransaction={
+                editingTransaction?.type === TransactionType.TRANSFER ? editingTransaction : null
+              }
+              onCancelEdit={() => setEditingTransaction(null)}
             />
+            {editingTransaction?.type !== TransactionType.TRANSFER && (
+              <TransactionForm
+                onAddTransaction={handleAddTransaction}
+                onUpdateTransaction={handleUpdateTransaction}
+                editingTransaction={editingTransaction}
+                onCancelEdit={() => setEditingTransaction(null)}
+                initialData={preFilledTransaction}
+                clients={clients}
+                employees={employees}
+                bankAccounts={bankAccounts}
+                companySettings={companySettings}
+              />
+            )}
             <TransactionList
               transactions={transactions}
               clients={clients}

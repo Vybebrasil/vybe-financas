@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { BankAccount, Transaction, TransactionStatus, TransactionType } from '../types';
+import { BankAccount, BankAccountType, Transaction } from '../types';
 import { formatCurrency, generateId } from '../utils';
 import { Building2, Plus, Pencil, Trash2, Star } from 'lucide-react';
+import { computeAccountBalance } from '../src/services/accountBalance';
 
 interface BankAccountsSectionProps {
   accounts: BankAccount[];
@@ -11,15 +12,12 @@ interface BankAccountsSectionProps {
   onDelete: (id: string) => void;
 }
 
-function computeBalance(account: BankAccount, transactions: Transaction[]): number {
-  const delta = transactions
-    .filter((t) => t.bankAccountId === account.id && t.status === TransactionStatus.PAID)
-    .reduce((sum, t) => {
-      const sign = t.type === TransactionType.INCOME ? 1 : -1;
-      return sum + t.amount * sign;
-    }, 0);
-  return account.initialBalance + delta;
-}
+const ACCOUNT_TYPE_LABELS: Record<BankAccountType, string> = {
+  checking: 'Conta corrente',
+  credit_card: 'Cartão de crédito',
+  cash: 'Caixa / dinheiro',
+  other: 'Outra',
+};
 
 const emptyForm = (): BankAccount => ({
   id: '',
@@ -27,6 +25,7 @@ const emptyForm = (): BankAccount => ({
   institution: '',
   initialBalance: 0,
   isDefault: false,
+  accountType: 'checking',
 });
 
 const BankAccountsSection: React.FC<BankAccountsSectionProps> = ({
@@ -41,7 +40,7 @@ const BankAccountsSection: React.FC<BankAccountsSectionProps> = ({
   const balances = useMemo(() => {
     const map = new Map<string, number>();
     for (const a of accounts) {
-      map.set(a.id, computeBalance(a, transactions));
+      map.set(a.id, computeAccountBalance(a, transactions));
     }
     return map;
   }, [accounts, transactions]);
@@ -84,7 +83,8 @@ const BankAccountsSection: React.FC<BankAccountsSectionProps> = ({
 
       {accounts.length === 0 && !form && (
         <p className="text-sm text-gray-500 mb-4">
-          Cadastre contas para filtrar o extrato e os relatórios por banco.
+          Cadastre contas para filtrar o extrato e os relatórios por banco. Para cartão de crédito,
+          registre compras como despesa e pague a fatura via <strong className="text-gray-400">Transferência</strong> no Financeiro.
         </p>
       )}
 
@@ -102,7 +102,8 @@ const BankAccountsSection: React.FC<BankAccountsSectionProps> = ({
                 )}
               </p>
               <p className="text-xs text-gray-500 truncate">
-                {account.institution || 'Sem instituição'} · Saldo:{' '}
+                {ACCOUNT_TYPE_LABELS[account.accountType ?? 'checking']}
+                {account.institution ? ` · ${account.institution}` : ''} · Saldo:{' '}
                 {formatCurrency(balances.get(account.id) ?? account.initialBalance)}
               </p>
             </div>
@@ -164,6 +165,22 @@ const BankAccountsSection: React.FC<BankAccountsSectionProps> = ({
                 }
                 className="w-full bg-[#1E1E1E] border border-gray-700 rounded p-2 text-sm text-white"
               />
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-500 block mb-1">Tipo</label>
+              <select
+                value={form.accountType ?? 'checking'}
+                onChange={(e) =>
+                  setForm({ ...form, accountType: e.target.value as BankAccountType })
+                }
+                className="w-full bg-[#1E1E1E] border border-gray-700 rounded p-2 text-sm text-white"
+              >
+                {(Object.keys(ACCOUNT_TYPE_LABELS) as BankAccountType[]).map((key) => (
+                  <option key={key} value={key}>
+                    {ACCOUNT_TYPE_LABELS[key]}
+                  </option>
+                ))}
+              </select>
             </div>
             <label className="flex items-center gap-2 text-sm text-gray-300 sm:col-span-2 cursor-pointer">
               <input

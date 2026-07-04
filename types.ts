@@ -2,6 +2,8 @@
 export enum TransactionType {
   INCOME = 'INCOME',
   EXPENSE = 'EXPENSE',
+  /** Movimentação entre contas — não entra em receitas/despesas */
+  TRANSFER = 'TRANSFER',
 }
 
 export enum TransactionStatus {
@@ -37,9 +39,13 @@ export interface Transaction {
   clientId?: string; // Centro de Custo / Cliente vinculado
   employeeId?: string; // Colaborador vinculado (despesas)
   bankAccountId?: string;
+  /** Conta destino (obrigatório quando type = TRANSFER) */
+  transferToAccountId?: string;
   paymentMethod: PaymentMethod;
   receiptUrl?: string;
 }
+
+export type BankAccountType = 'checking' | 'credit_card' | 'cash' | 'other';
 
 export interface BankAccount {
   id: string;
@@ -47,6 +53,7 @@ export interface BankAccount {
   institution: string;
   initialBalance: number;
   isDefault: boolean;
+  accountType?: BankAccountType;
 }
 
 export interface DashboardSummary {

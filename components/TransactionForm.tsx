@@ -81,6 +81,7 @@ const TransactionForm: React.FC<TransactionFormProps> = ({
 
 
   useEffect(() => {
+    if (editingTransaction?.type === TransactionType.TRANSFER) return;
     if (editingTransaction) {
       setDescription(editingTransaction.description);
       setAmount(editingTransaction.amount.toString());

@@ -248,7 +248,8 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   );
 
   const assertPeriodOpenForTransaction = useCallback(
-    (transaction: Pick<Transaction, 'date' | 'paidDate' | 'status'>) => {
+    (transaction: Pick<Transaction, 'type' | 'date' | 'paidDate' | 'status'>) => {
+      if (transaction.type === TransactionType.TRANSFER) return;
       const monthKey = monthKeyFromDate(getTransactionFilterDate(transaction as Transaction));
       if (isPeriodClosed(monthKey)) {
         throw new Error(`O período ${monthKey} está fechado. Reabra em Financeiro para editar.`);
@@ -592,12 +593,14 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
 
   const handleUpdateTransaction = async (transaction: Transaction) => {
     const existing = transactions.find((t) => t.id === transaction.id);
-    if (
-      (existing && isTransactionInClosedPeriod(existing, periodClosures)) ||
-      isTransactionInClosedPeriod(transaction, periodClosures)
-    ) {
-      toast.error('Este lançamento pertence a um período fechado.');
-      return;
+    if (transaction.type !== TransactionType.TRANSFER) {
+      if (
+        (existing && isTransactionInClosedPeriod(existing, periodClosures)) ||
+        isTransactionInClosedPeriod(transaction, periodClosures)
+      ) {
+        toast.error('Este lançamento pertence a um período fechado.');
+        return;
+      }
     }
     const updated = await api.transactions.update(transaction.id, transaction);
     setTransactions((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));

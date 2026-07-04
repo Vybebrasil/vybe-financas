@@ -6,7 +6,7 @@ import {
   getTransactionScheduledDate,
 } from '../src/services/transactionDates';
 import { formatCurrency, formatDate } from '../utils';
-import { Trash2, TrendingUp, TrendingDown, Calendar, Tag, Filter, XCircle, FileText, Briefcase, QrCode, CreditCard, Barcode, Banknote, CheckCircle, Clock, Paperclip, Pencil } from 'lucide-react';
+import { Trash2, TrendingUp, TrendingDown, Calendar, Tag, Filter, XCircle, FileText, Briefcase, QrCode, CreditCard, Barcode, Banknote, CheckCircle, Clock, Paperclip, Pencil, ArrowLeftRight } from 'lucide-react';
 import SettlementDateModal from './SettlementDateModal';
 
 interface TransactionListProps {
@@ -94,7 +94,10 @@ const TransactionList: React.FC<TransactionListProps> = ({
       const matchCategory = filterCategory === 'all' || t.category === filterCategory;
       const matchBank =
         filterBankAccount === 'all' ||
-        (filterBankAccount === 'none' ? !t.bankAccountId : t.bankAccountId === filterBankAccount);
+        (filterBankAccount === 'none'
+          ? !t.bankAccountId && !t.transferToAccountId
+          : t.bankAccountId === filterBankAccount ||
+            t.transferToAccountId === filterBankAccount);
       const matchType = filterType === 'all' || t.type === filterType;
 
       return matchYear && matchMonth && matchCategory && matchBank && matchType;
@@ -115,6 +118,9 @@ const TransactionList: React.FC<TransactionListProps> = ({
     filterCategory !== 'all' ||
     filterBankAccount !== 'all' ||
     filterType !== 'all';
+
+  const accountName = (id?: string) =>
+    bankAccounts.find((a) => a.id === id)?.name ?? '—';
 
   const getPaymentIcon = (method?: PaymentMethod) => {
     switch (method) {
@@ -203,6 +209,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                 <option value="all">Entradas e saídas</option>
                 <option value={TransactionType.INCOME}>Entradas</option>
                 <option value={TransactionType.EXPENSE}>Saídas</option>
+                <option value={TransactionType.TRANSFER}>Transferências</option>
               </select>
 
               {/* Filtro Categoria */}
@@ -278,6 +285,10 @@ const TransactionList: React.FC<TransactionListProps> = ({
                   transaction.status === TransactionStatus.PAID &&
                   transaction.paidDate &&
                   transaction.paidDate !== scheduledDate;
+                const isTransfer = transaction.type === TransactionType.TRANSFER;
+                const transferLabel = isTransfer
+                  ? `${accountName(transaction.bankAccountId)} → ${accountName(transaction.transferToAccountId)}`
+                  : '';
 
                 return (
                   <tr
@@ -295,15 +306,18 @@ const TransactionList: React.FC<TransactionListProps> = ({
                               <Clock size={10} />
                             </span>
                           )}
-                          <span className={`font-medium text-sm truncate block min-w-0 ${transaction.status === TransactionStatus.PENDING ? 'text-amber-100' : 'text-white'}`} title={transaction.description}>
+                          <span className={`font-medium text-sm truncate block min-w-0 ${transaction.status === TransactionStatus.PENDING ? 'text-amber-100' : isTransfer ? 'text-sky-100' : 'text-white'}`} title={transaction.description}>
                             {transaction.description}
                           </span>
                         </div>
+                        {isTransfer && (
+                          <span className="text-[10px] text-sky-400/90 mt-1 truncate">{transferLabel}</span>
+                        )}
 
                         {/* Mobile/Tablet view info */}
                         <div className="flex flex-wrap gap-2 mt-1.5">
                           {/* Payment Method Tag */}
-                          {transaction.paymentMethod && (
+                          {!isTransfer && transaction.paymentMethod && (
                             <div className="flex items-center gap-1 text-[10px] text-gray-400 bg-[#121212] px-1.5 py-0.5 rounded border border-gray-700" title={`Pagamento via ${transaction.paymentMethod}`}>
                               {getPaymentIcon(transaction.paymentMethod)}
                               <span className="uppercase">{transaction.paymentMethod}</span>
@@ -332,7 +346,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
 
                           {/* Categoria Tag (Visible on Mobile < md) */}
                           <div className="md:hidden flex items-center gap-1 text-[10px] text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded truncate max-w-[100px]">
-                            <Tag size={10} className="shrink-0" /> <span className="truncate">{transaction.category}</span>
+                            <Tag size={10} className="shrink-0" /> <span className="truncate">{isTransfer ? 'Transferência' : transaction.category}</span>
                           </div>
 
                           {/* Data Tag (Visible on Mobile < sm) */}
@@ -348,14 +362,25 @@ const TransactionList: React.FC<TransactionListProps> = ({
 
                     <td className="px-2 py-2.5 text-right align-top md:align-middle whitespace-nowrap">
                       <div className="flex items-center justify-end gap-0.5">
-                        {transaction.type === TransactionType.INCOME ? (
+                        {isTransfer ? (
+                          <ArrowLeftRight size={12} className="text-sky-400 shrink-0 hidden sm:block" />
+                        ) : transaction.type === TransactionType.INCOME ? (
                           <TrendingUp size={12} className="text-vybe-green shrink-0 hidden sm:block" />
                         ) : (
                           <TrendingDown size={12} className="text-vybe-red shrink-0 hidden sm:block" />
                         )}
-                        <span className={`font-semibold text-xs sm:text-sm tabular-nums ${transaction.type === TransactionType.INCOME ? 'text-vybe-green' : 'text-vybe-red'}`}>
-                          {transaction.type === TransactionType.EXPENSE ? '- ' : '+ '}
-                          {formatCurrency(transaction.amount)}
+                        <span
+                          className={`font-semibold text-xs sm:text-sm tabular-nums ${
+                            isTransfer
+                              ? 'text-sky-400'
+                              : transaction.type === TransactionType.INCOME
+                                ? 'text-vybe-green'
+                                : 'text-vybe-red'
+                          }`}
+                        >
+                          {isTransfer
+                            ? formatCurrency(transaction.amount)
+                            : `${transaction.type === TransactionType.EXPENSE ? '- ' : '+ '}${formatCurrency(transaction.amount)}`}
                         </span>
                       </div>
                     </td>
@@ -373,8 +398,11 @@ const TransactionList: React.FC<TransactionListProps> = ({
                     </td>
 
                     <td className="px-2 py-2.5 hidden md:table-cell align-middle overflow-hidden">
-                      <span className="block text-[10px] text-gray-400 truncate" title={transaction.category}>
-                        {transaction.category}
+                      <span
+                        className="block text-[10px] text-gray-400 truncate"
+                        title={isTransfer ? transferLabel || transaction.category : transaction.category}
+                      >
+                        {isTransfer ? 'Transferência' : transaction.category}
                       </span>
                     </td>
 
@@ -422,7 +450,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                             <Pencil size={14} />
                           </button>
                         )}
-                        {onGenerateReceipt && (
+                        {onGenerateReceipt && !isTransfer && (
                           <button
                             type="button"
                             onClick={() => onGenerateReceipt(transaction)}

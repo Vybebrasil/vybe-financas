@@ -8,6 +8,8 @@ import {
 export function computeDashboardSummary(transactions: Transaction[]): DashboardSummary {
   const base = transactions.reduce(
     (acc, curr) => {
+      if (curr.type === TransactionType.TRANSFER) return acc;
+
       if (curr.status === TransactionStatus.PAID) {
         if (curr.type === TransactionType.INCOME) {
           acc.totalIncome += curr.amount;

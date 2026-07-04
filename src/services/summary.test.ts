@@ -47,4 +47,45 @@ describe('computeDashboardSummary', () => {
     expect(summary.pendingIncome).toBe(500);
     expect(summary.projectedBalance).toBe(500);
   });
+
+  it('não duplica despesa ao pagar fatura do cartão via transferência', () => {
+    const summary = computeDashboardSummary([
+      {
+        id: '1',
+        description: 'Adobe',
+        amount: 100,
+        type: TransactionType.EXPENSE,
+        category: Category.TOOLS,
+        date: '2026-06-01',
+        status: TransactionStatus.PAID,
+        paymentMethod: 'CARTAO',
+      },
+      {
+        id: '2',
+        description: 'Canva',
+        amount: 200,
+        type: TransactionType.EXPENSE,
+        category: Category.TOOLS,
+        date: '2026-06-05',
+        status: TransactionStatus.PAID,
+        paymentMethod: 'CARTAO',
+      },
+      {
+        id: '3',
+        description: 'Pagamento fatura cartão',
+        amount: 300,
+        type: TransactionType.TRANSFER,
+        category: 'Transferência entre contas',
+        date: '2026-06-10',
+        status: TransactionStatus.PAID,
+        bankAccountId: 'checking',
+        transferToAccountId: 'card',
+        paymentMethod: 'OUTRO',
+      },
+    ]);
+
+    expect(summary.totalExpense).toBe(300);
+    expect(summary.totalIncome).toBe(0);
+    expect(summary.balance).toBe(-300);
+  });
 });

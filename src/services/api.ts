@@ -12,6 +12,7 @@ import {
   BankAccount,
   CategoryConfig,
 } from '../../types';
+import { validateTransferTransaction } from './transfers';
 import {
   mapCompanySettingsFromDB,
   mapCompanySettingsFromMetadata,
@@ -56,6 +57,7 @@ const mapTransactionFromDB = (data: Record<string, unknown>): Transaction => ({
   clientId: (data.client_id as string) || undefined,
   employeeId: (data.employee_id as string) || undefined,
   bankAccountId: (data.bank_account_id as string) || undefined,
+  transferToAccountId: (data.transfer_to_account_id as string) || undefined,
   paymentMethod: (data.payment_method as Transaction['paymentMethod']) || 'OUTRO',
   receiptUrl: (data.receipt_url as string) || undefined,
 });
@@ -78,6 +80,9 @@ const mapTransactionToDB = (t: Omit<Transaction, 'id'> | Transaction, userId: st
   // Só envia se houver conta — evita erro quando a coluna ainda não existe no Supabase
   if (t.bankAccountId) {
     row.bank_account_id = t.bankAccountId;
+  }
+  if (t.transferToAccountId) {
+    row.transfer_to_account_id = t.transferToAccountId;
   }
   return row;
 };
@@ -203,6 +208,7 @@ const mapBankAccountFromDB = (row: Record<string, unknown>): BankAccount => ({
   institution: (row.institution as string) || '',
   initialBalance: Number(row.initial_balance) || 0,
   isDefault: Boolean(row.is_default),
+  accountType: (row.account_type as BankAccount['accountType']) || 'checking',
 });
 
 const mapBankAccountToDB = (a: Omit<BankAccount, 'id'>, userId: string) => ({
@@ -211,6 +217,7 @@ const mapBankAccountToDB = (a: Omit<BankAccount, 'id'>, userId: string) => ({
   institution: a.institution,
   initial_balance: a.initialBalance,
   is_default: a.isDefault,
+  account_type: a.accountType ?? 'checking',
 });
 
 const mapSubscriptionToDB = (s: Omit<Subscription, 'id'>, userId: string) => ({
@@ -377,6 +384,7 @@ export const api = {
 
     async create(transaction: Omit<Transaction, 'id'> | Transaction) {
       const { user, ownerId } = await requireWorkspace();
+      validateTransferTransaction(transaction);
       const payload = mapTransactionToDB(transaction, ownerId);
 
       const { data, error } = await supabase
@@ -424,6 +432,7 @@ export const api = {
 
     async update(id: string, transaction: Transaction) {
       const { user, ownerId } = await requireWorkspace();
+      validateTransferTransaction(transaction);
       const payload = mapTransactionToDB(transaction, ownerId);
       const { data, error } = await supabase
         .from('transactions')
