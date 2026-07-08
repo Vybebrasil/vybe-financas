@@ -58,15 +58,36 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
 
     // Pendente do mês: mensalidade contratada menos o que já foi pago no mês atual
     const currentMonthKey = new Date().toISOString().slice(0, 7);
-    const paidThisMonth = clientTransactions
-      .filter(
-        (t) =>
-          t.type === TransactionType.INCOME &&
-          t.status === TransactionStatus.PAID &&
-          t.date.startsWith(currentMonthKey),
-      )
-      .reduce((sum, t) => sum + t.amount, 0);
+    const paidByMonth = new Map<string, number>();
+    for (const t of clientTransactions) {
+      if (t.type !== TransactionType.INCOME || t.status !== TransactionStatus.PAID) continue;
+      const key = t.date.slice(0, 7);
+      paidByMonth.set(key, (paidByMonth.get(key) ?? 0) + t.amount);
+    }
+    const paidThisMonth = paidByMonth.get(currentMonthKey) ?? 0;
     const monthPending = Math.max(client.monthlyFee - paidThisMonth, 0);
+
+    // Pendente acumulado de meses anteriores: soma dos déficits mês a mês
+    // desde o primeiro mês com movimentação do cliente até o mês passado.
+    const allMonthKeys = clientTransactions
+      .filter((t) => t.type === TransactionType.INCOME)
+      .map((t) => t.date.slice(0, 7));
+    let pastDue = 0;
+    if (allMonthKeys.length > 0 && client.monthlyFee > 0) {
+      const firstMonthKey = allMonthKeys.reduce((min, k) => (k < min ? k : min));
+      let [y, m] = firstMonthKey.split('-').map(Number);
+      const [cy, cm] = currentMonthKey.split('-').map(Number);
+      while (y < cy || (y === cy && m < cm)) {
+        const key = `${y}-${String(m).padStart(2, '0')}`;
+        pastDue += Math.max(client.monthlyFee - (paidByMonth.get(key) ?? 0), 0);
+        m += 1;
+        if (m > 12) {
+          m = 1;
+          y += 1;
+        }
+      }
+    }
+    const totalPending = pastDue + monthPending;
 
     return {
       totalIncome: totals.totalIncome,
@@ -79,6 +100,8 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
       avgMonthlyLtv,
       paidThisMonth,
       monthPending,
+      pastDue,
+      totalPending,
     };
   }, [clientTransactions, client.monthlyFee]);
 
@@ -113,7 +136,7 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
         <div className="p-6 overflow-y-auto custom-scrollbar">
           
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
              <div className="bg-[#121212] p-4 rounded-xl border border-gray-800">
                 <span className="text-xs text-gray-500 block mb-1">Total Recebido</span>
                 <span className="text-lg font-bold text-vybe-green">{formatCurrency(stats.totalIncome)}</span>
@@ -134,6 +157,21 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
                   {stats.monthPending > 0
                     ? `Pago ${formatCurrency(stats.paidThisMonth)} de ${formatCurrency(client.monthlyFee)}`
                     : 'Mensalidade do mês quitada'}
+                </span>
+             </div>
+             <div className={`bg-[#121212] p-4 rounded-xl border ${stats.totalPending > 0 ? 'border-red-500/30' : 'border-gray-800'}`}>
+                <span className="text-xs text-gray-500 block mb-1 flex items-center gap-1">
+                  <Clock size={12} className={stats.totalPending > 0 ? 'text-red-400' : 'text-vybe-green'} /> Pendente Total
+                </span>
+                <span className={`text-lg font-bold ${stats.totalPending > 0 ? 'text-red-400' : 'text-vybe-green'}`}>
+                    {formatCurrency(stats.totalPending)}
+                </span>
+                <span className="text-[10px] text-gray-500 block mt-1">
+                  {stats.totalPending === 0
+                    ? 'Nenhum pagamento em atraso'
+                    : stats.pastDue > 0
+                      ? `${formatCurrency(stats.pastDue)} de meses anteriores + ${formatCurrency(stats.monthPending)} do mês`
+                      : 'Apenas o pendente do mês atual'}
                 </span>
              </div>
              <div className="bg-[#121212] p-4 rounded-xl border border-gray-800">
