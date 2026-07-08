@@ -56,6 +56,18 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
     const ltv = totals.totalIncome;
     const avgMonthlyLtv = monthsActive > 0 ? ltv / monthsActive : 0;
 
+    // Pendente do mês: mensalidade contratada menos o que já foi pago no mês atual
+    const currentMonthKey = new Date().toISOString().slice(0, 7);
+    const paidThisMonth = clientTransactions
+      .filter(
+        (t) =>
+          t.type === TransactionType.INCOME &&
+          t.status === TransactionStatus.PAID &&
+          t.date.startsWith(currentMonthKey),
+      )
+      .reduce((sum, t) => sum + t.amount, 0);
+    const monthPending = Math.max(client.monthlyFee - paidThisMonth, 0);
+
     return {
       totalIncome: totals.totalIncome,
       pendingIncome: totals.pendingIncome,
@@ -65,8 +77,10 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
       ltv,
       monthsActive,
       avgMonthlyLtv,
+      paidThisMonth,
+      monthPending,
     };
-  }, [clientTransactions]);
+  }, [clientTransactions, client.monthlyFee]);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
@@ -99,7 +113,7 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
         <div className="p-6 overflow-y-auto custom-scrollbar">
           
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
              <div className="bg-[#121212] p-4 rounded-xl border border-gray-800">
                 <span className="text-xs text-gray-500 block mb-1">Total Recebido</span>
                 <span className="text-lg font-bold text-vybe-green">{formatCurrency(stats.totalIncome)}</span>
@@ -108,6 +122,19 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
                     <Clock size={10} /> {formatCurrency(stats.pendingIncome)} pendente
                   </span>
                 )}
+             </div>
+             <div className={`bg-[#121212] p-4 rounded-xl border ${stats.monthPending > 0 ? 'border-yellow-500/30' : 'border-gray-800'}`}>
+                <span className="text-xs text-gray-500 block mb-1 flex items-center gap-1">
+                  <Clock size={12} className={stats.monthPending > 0 ? 'text-yellow-500' : 'text-vybe-green'} /> Pendente do Mês
+                </span>
+                <span className={`text-lg font-bold ${stats.monthPending > 0 ? 'text-yellow-500' : 'text-vybe-green'}`}>
+                    {formatCurrency(stats.monthPending)}
+                </span>
+                <span className="text-[10px] text-gray-500 block mt-1">
+                  {stats.monthPending > 0
+                    ? `Pago ${formatCurrency(stats.paidThisMonth)} de ${formatCurrency(client.monthlyFee)}`
+                    : 'Mensalidade do mês quitada'}
+                </span>
              </div>
              <div className="bg-[#121212] p-4 rounded-xl border border-gray-800">
                 <span className="text-xs text-gray-500 block mb-1 flex items-center gap-1">
