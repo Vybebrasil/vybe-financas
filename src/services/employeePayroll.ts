@@ -32,6 +32,29 @@ export function isPayrollDeduction(
   return true;
 }
 
+/** Lançamento que conta como pagamento ao colaborador (exclui abatimentos de vale). */
+export function isEmployeeCashOutflow(transaction: Transaction, employeeId: string): boolean {
+  if (transaction.type !== TransactionType.EXPENSE) return false;
+  if (transaction.employeeId !== employeeId) return false;
+  if (transaction.category === Category.EMPLOYEE_VALE_SETTLEMENT) return false;
+  if (transaction.status !== TransactionStatus.PAID) return false;
+  return true;
+}
+
+export function getEmployeeValeSettlementsTotal(
+  employee: Employee,
+  transactions: Transaction[],
+): number {
+  return transactions
+    .filter(
+      (t) =>
+        t.employeeId === employee.id &&
+        t.status === TransactionStatus.PAID &&
+        t.category === Category.EMPLOYEE_VALE_SETTLEMENT,
+    )
+    .reduce((sum, t) => sum + t.amount, 0);
+}
+
 export function getEmployeeLinkedTransactions(
   employee: Employee,
   transactions: Transaction[],
@@ -112,15 +135,13 @@ export function computeEmployeeMonthlyOverpaymentVales(
   const paidByMonth = new Map<string, number>();
 
   for (const t of transactions) {
-    if (t.type !== TransactionType.EXPENSE) continue;
-    if (t.employeeId !== employee.id) continue;
-    if (t.status !== TransactionStatus.PAID) continue;
+    if (!isEmployeeCashOutflow(t, employee.id)) continue;
     const key = getTransactionFilterDate(t).slice(0, 7);
     paidByMonth.set(key, (paidByMonth.get(key) ?? 0) + t.amount);
   }
 
   const byMonth = new Map<string, number>();
-  let total = 0;
+  let grossTotal = 0;
   for (const [monthKey, paid] of paidByMonth) {
     const { salary, bonus } = getEmployeeCompensationForMonth(
       employee,
@@ -131,11 +152,14 @@ export function computeEmployeeMonthlyOverpaymentVales(
     const excess = Math.max(0, paid - entitlement);
     if (excess > 0) {
       byMonth.set(monthKey, excess);
-      total += excess;
+      grossTotal += excess;
     }
   }
 
-  return { byMonth, total };
+  const settled = getEmployeeValeSettlementsTotal(employee, transactions);
+  const total = Math.max(0, grossTotal - settled);
+
+  return { byMonth, total, grossTotal, settled };
 }
 
 export function getEmployeeTotalOverpaymentVales(
@@ -148,6 +172,10 @@ export function getEmployeeTotalOverpaymentVales(
     transactions,
     compensationHistory,
   ).total;
+}
+
+export function buildValeSettlementDescription(employeeName: string): string {
+  return `Abatimento de vale - ${employeeName}`;
 }
 
 export function buildValeDescription(preset: string, employeeName: string, custom?: string): string {

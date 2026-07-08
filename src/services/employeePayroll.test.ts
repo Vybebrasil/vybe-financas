@@ -5,6 +5,7 @@ import {
   computeEmployeeMonthlyOverpaymentVales,
   getEmployeeCompensationForMonth,
   getEmployeeLinkedTransactions,
+  getEmployeeTotalOverpaymentVales,
 } from './employeePayroll';
 import { salaryDescriptionForEmployee } from './recurringLogic';
 
@@ -306,6 +307,51 @@ describe('employeePayroll', () => {
     expect(byMonth.get('2026-06')).toBe(600);
     expect(byMonth.get('2026-07')).toBe(500);
     expect(total).toBe(1200);
+  });
+
+  it('abatimento de vale reduz o total em vales e desconta da folha', () => {
+    const vini: Employee = {
+      id: 'v1',
+      name: 'Vinicius',
+      role: 'COO',
+      salary: 3000,
+      bonus: 0,
+      pixKey: '',
+      paymentDay: 5,
+    };
+    const history: EmployeeCompensationHistory[] = [
+      { id: 'h1', employeeId: 'v1', effectiveMonth: '2026-07', salary: 3000, bonus: 0 },
+    ];
+    const txs = [
+      {
+        id: 'p1',
+        description: 'Salário - Vinicius',
+        amount: 3500,
+        type: TransactionType.EXPENSE,
+        category: Category.SALARY,
+        date: '2026-07-08',
+        status: TransactionStatus.PAID,
+        paymentMethod: 'PIX',
+        employeeId: 'v1',
+      },
+      {
+        id: 's1',
+        description: 'Abatimento de vale - Vinicius',
+        amount: 200,
+        type: TransactionType.EXPENSE,
+        category: Category.EMPLOYEE_VALE_SETTLEMENT,
+        date: '2026-07-10',
+        status: TransactionStatus.PAID,
+        paymentMethod: 'PIX',
+        employeeId: 'v1',
+      },
+    ];
+
+    expect(getEmployeeTotalOverpaymentVales(vini, txs, history)).toBe(300);
+
+    const payroll = computeEmployeeAmountToPay(vini, txs, '2026-07');
+    expect(payroll.linkedExpenses).toBe(200);
+    expect(payroll.amountToPay).toBe(0);
   });
 
   it('resolve salário vigente pelo histórico do mês', () => {

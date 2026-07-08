@@ -3,13 +3,14 @@ import { Employee, EmployeeCompensationHistory, Transaction, TransactionType, Tr
 import { formatCurrency, formatDate, generateId } from '../utils';
 import {
   computeEmployeeAmountToPay,
+  buildValeSettlementDescription,
   getEmployeeTotalOverpaymentVales,
   isPayrollDeduction,
 } from '../src/services/employeePayroll';
 import { getCurrentMonthKey } from '../src/services/recurringLogic';
 import { getTransactionFilterDate } from '../src/services/transactionDates';
 import SettlementDateModal from './SettlementDateModal';
-import EmployeeValeModal from './EmployeeValeModal';
+import EmployeeValeSettleModal from './EmployeeValeSettleModal';
 import { useToast } from './ToastProvider';
 import { X, User, Save, Edit2, FileText, DollarSign, Calendar, CreditCard, TrendingDown, ChevronDown, Clock, CheckCircle, History, Ticket } from 'lucide-react';
 
@@ -184,29 +185,22 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
     setSettlingTransaction(null);
   };
 
-  const handleRegisterVale = async (payload: {
-    description: string;
-    amount: number;
-    date: string;
-    status: TransactionStatus;
-  }) => {
+  const handleSettleVale = async (payload: { amount: number; date: string }) => {
     if (!employee || !onAddTransaction) return;
     await onAddTransaction({
       id: generateId(),
-      description: payload.description,
+      description: buildValeSettlementDescription(employee.name),
       amount: payload.amount,
-      category: Category.EMPLOYEE_VOUCHER,
+      category: Category.EMPLOYEE_VALE_SETTLEMENT,
       type: TransactionType.EXPENSE,
       date: payload.date,
-      paidDate: payload.status === TransactionStatus.PAID ? payload.date : undefined,
-      status: payload.status,
+      paidDate: payload.date,
+      status: TransactionStatus.PAID,
       paymentMethod: 'PIX',
       employeeId: employee.id,
     });
     toast.success(
-      payload.status === TransactionStatus.PENDING
-        ? 'Vale pendente registrado.'
-        : 'Vale baixado e descontado da folha do mês.',
+      `Vale de ${formatCurrency(payload.amount)} abatido do saldo e descontado da folha do mês.`,
     );
   };
 
@@ -217,14 +211,13 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
         onClose={() => setSettlingTransaction(null)}
         onConfirm={handleConfirmSettlement}
       />
-      <EmployeeValeModal
+      <EmployeeValeSettleModal
         isOpen={isValeModalOpen}
         employee={employee}
+        outstandingVales={totalOverpaymentVales}
         amountToPay={payroll?.amountToPay ?? 0}
-        heading="Baixar vale"
-        submitPaidLabel="Baixar vale"
         onClose={() => setIsValeModalOpen(false)}
-        onSubmit={handleRegisterVale}
+        onSubmit={handleSettleVale}
       />
       {/* Backdrop */}
       <div 
@@ -247,7 +240,7 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
              </div>
           </div>
           <div className="flex items-center gap-2">
-            {!isEditing && onAddTransaction && (
+            {!isEditing && onAddTransaction && totalOverpaymentVales > 0 && (
               <button
                 type="button"
                 onClick={() => setIsValeModalOpen(true)}
@@ -399,7 +392,7 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                               <div className="bg-[#1E1E1E] rounded-lg border border-amber-900/30 p-3 space-y-1">
                                 <div className="flex justify-between items-center gap-2">
                                   <span className="text-xs text-gray-500">Folha do mês</span>
-                                  {onAddTransaction && !isEditing && (
+                                  {onAddTransaction && !isEditing && totalOverpaymentVales > 0 && (
                                     <button
                                       type="button"
                                       onClick={() => setIsValeModalOpen(true)}

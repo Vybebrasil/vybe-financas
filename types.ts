@@ -22,6 +22,8 @@ export enum Category {
   FIXED_EXPENSE = 'Gastos Fixos',
   /** Vale transporte, refeição, adiantamento — desconta da folha do colaborador */
   EMPLOYEE_VOUCHER = 'Vale (colaborador)',
+  /** Abatimento do saldo de vales (excesso pago) — reduz total em vales e desconta da folha */
+  EMPLOYEE_VALE_SETTLEMENT = 'Abatimento de vale',
 }
 
 export type PaymentMethod = 'PIX' | 'BOLETO' | 'CARTAO' | 'DINHEIRO' | 'OUTRO';
