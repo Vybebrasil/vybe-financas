@@ -3,7 +3,12 @@ import { Employee, Subscription, Category, Transaction, TransactionType, Transac
 import { formatCurrency, generateId } from '../utils';
 import { computeEmployeeAmountToPay } from '../src/services/employeePayroll';
 import { getCurrentMonthKey, salaryPartialDescriptionForEmployee, salaryDescriptionForEmployee } from '../src/services/recurringLogic';
-import { Users, Plus, Trash2, Laptop, ShoppingBag, DollarSign, Eye, Pencil, X, Save, History, Pin, Ticket } from 'lucide-react';
+import {
+  getSubscriptionBillingSnapshot,
+  getSubscriptionMonthPaymentBadge,
+  getSubscriptionPastDueTotal,
+} from '../src/services/subscriptionBilling';
+import { Users, Plus, Trash2, Laptop, ShoppingBag, DollarSign, Eye, Pencil, X, Save, History, Pin, Ticket, CheckCircle, Clock } from 'lucide-react';
 import SubscriptionHistoryModal from './SubscriptionHistoryModal';
 import EmployeeValeModal from './EmployeeValeModal';
 import EmployeeSalaryPayModal from './EmployeeSalaryPayModal';
@@ -574,7 +579,11 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
           {subscriptions.length === 0 && (
             <p className="text-gray-500 text-sm italic">Nenhum software cadastrado.</p>
           )}
-          {subscriptions.map(sub => (
+          {subscriptions.map(sub => {
+            const snapshot = getSubscriptionBillingSnapshot(sub, transactions, monthKey);
+            const monthBadge = getSubscriptionMonthPaymentBadge(snapshot);
+            const pastDue = getSubscriptionPastDueTotal(sub, transactions, monthKey);
+            return (
             <div
               key={sub.id}
               className="flex flex-col md:flex-row justify-between items-center bg-[#121212] p-4 rounded-lg border border-gray-800 hover:border-gray-600 transition-colors"
@@ -584,7 +593,18 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                   <Laptop size={18} />
                 </div>
                 <div>
-                  <h4 className="font-bold text-white text-sm">{sub.name}</h4>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-bold text-white text-sm">{sub.name}</h4>
+                    {monthBadge && (
+                      <span
+                        className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${monthBadge.className}`}
+                        title={monthBadge.title}
+                      >
+                        {monthBadge.label === 'Pago' ? <CheckCircle size={10} /> : <Clock size={10} />}
+                        {monthBadge.label}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-500">
                     Renova dia {sub.renewalDay} · {sub.paymentMethod}
                   </p>
@@ -594,6 +614,14 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                 <div className="text-right">
                   <span className="block text-xs text-gray-400">Mensal</span>
                   <span className="block font-bold text-vybe-red text-sm">{formatCurrency(sub.cost)}</span>
+                  {pastDue > 0 && (
+                    <span
+                      className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full"
+                      title="Total de mensalidades pendentes de meses anteriores"
+                    >
+                      <Clock size={10} /> {formatCurrency(pastDue)} em atraso
+                    </span>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -626,7 +654,8 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
