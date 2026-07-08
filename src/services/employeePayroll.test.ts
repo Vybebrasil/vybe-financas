@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { Category, Employee, TransactionStatus, TransactionType } from '../../types';
+import { Category, Employee, EmployeeCompensationHistory, TransactionStatus, TransactionType } from '../../types';
 import {
   computeEmployeeAmountToPay,
+  computeEmployeeMonthlyOverpaymentVales,
+  getEmployeeCompensationForMonth,
   getEmployeeLinkedTransactions,
 } from './employeePayroll';
 import { salaryDescriptionForEmployee } from './recurringLogic';
@@ -160,6 +162,198 @@ describe('employeePayroll', () => {
     );
     expect(afterPartial.salaryPaid).toBe(1200);
     expect(afterPartial.amountToPay).toBe(1800);
+  });
+
+  it('soma vales como excesso pago acima de salário + bônus por mês', () => {
+    const vini: Employee = {
+      id: 'v1',
+      name: 'Vinicius Damascena',
+      role: 'COO',
+      salary: 3000,
+      bonus: 0,
+      pixKey: '',
+      paymentDay: 5,
+    };
+    const txs = [
+      // Maio: pago 2600 com salário vigente 2500 — usa salário atual 3000 → sem excesso
+      {
+        id: 'm1',
+        description: 'Salário - Vinicius Damascena',
+        amount: 2500,
+        type: TransactionType.EXPENSE,
+        category: Category.SALARY,
+        date: '2026-05-20',
+        status: TransactionStatus.PAID,
+        paymentMethod: 'PIX',
+        employeeId: 'v1',
+      },
+      {
+        id: 'm2',
+        description: 'vale',
+        amount: 100,
+        type: TransactionType.EXPENSE,
+        category: Category.EMPLOYEE_VOUCHER,
+        date: '2026-05-05',
+        status: TransactionStatus.PAID,
+        paymentMethod: 'PIX',
+        employeeId: 'v1',
+      },
+      // Junho: 3600 pago, salário 3000 → 600 de vale
+      {
+        id: 'j1',
+        description: 'Vale Vini',
+        amount: 100,
+        type: TransactionType.EXPENSE,
+        category: Category.EMPLOYEE_VOUCHER,
+        date: '2026-06-10',
+        status: TransactionStatus.PAID,
+        paymentMethod: 'PIX',
+        employeeId: 'v1',
+      },
+      {
+        id: 'j2',
+        description: 'Salário Vini',
+        amount: 1250,
+        type: TransactionType.EXPENSE,
+        category: Category.SALARY,
+        date: '2026-06-10',
+        status: TransactionStatus.PAID,
+        paymentMethod: 'PIX',
+        employeeId: 'v1',
+      },
+      {
+        id: 'j3',
+        description: 'Vale - Vini',
+        amount: 750,
+        type: TransactionType.EXPENSE,
+        category: Category.EMPLOYEE_VOUCHER,
+        date: '2026-06-15',
+        status: TransactionStatus.PAID,
+        paymentMethod: 'PIX',
+        employeeId: 'v1',
+      },
+      {
+        id: 'j4',
+        description: 'Vale - Vini',
+        amount: 1500,
+        type: TransactionType.EXPENSE,
+        category: Category.EMPLOYEE_VOUCHER,
+        date: '2026-06-20',
+        status: TransactionStatus.PAID,
+        paymentMethod: 'PIX',
+        employeeId: 'v1',
+      },
+      // Julho: 3500 pago, salário 3000 → 500 de vale
+      {
+        id: 'jl1',
+        description: 'Vale refeição - Vinicius Damascena',
+        amount: 500,
+        type: TransactionType.EXPENSE,
+        category: Category.EMPLOYEE_VOUCHER,
+        date: '2026-07-08',
+        status: TransactionStatus.PAID,
+        paymentMethod: 'PIX',
+        employeeId: 'v1',
+      },
+      {
+        id: 'jl2',
+        description: 'Salário - Vinicius Damascena',
+        amount: 1500,
+        type: TransactionType.EXPENSE,
+        category: Category.SALARY,
+        date: '2026-07-08',
+        status: TransactionStatus.PAID,
+        paymentMethod: 'PIX',
+        employeeId: 'v1',
+      },
+      {
+        id: 'jl3',
+        description: 'Salário (parcial) - Vinicius Damascena',
+        amount: 1500,
+        type: TransactionType.EXPENSE,
+        category: Category.SALARY,
+        date: '2026-07-08',
+        status: TransactionStatus.PAID,
+        paymentMethod: 'PIX',
+        employeeId: 'v1',
+      },
+    ];
+    const history: EmployeeCompensationHistory[] = [
+      {
+        id: 'h0',
+        employeeId: 'v1',
+        effectiveMonth: '1970-01',
+        salary: 3000,
+        bonus: 0,
+      },
+      {
+        id: 'h1',
+        employeeId: 'v1',
+        effectiveMonth: '2026-05',
+        salary: 2500,
+        bonus: 0,
+      },
+      {
+        id: 'h2',
+        employeeId: 'v1',
+        effectiveMonth: '2026-06',
+        salary: 3000,
+        bonus: 0,
+      },
+    ];
+    const { byMonth, total } = computeEmployeeMonthlyOverpaymentVales(vini, txs, history);
+    expect(byMonth.get('2026-05')).toBe(100);
+    expect(byMonth.get('2026-06')).toBe(600);
+    expect(byMonth.get('2026-07')).toBe(500);
+    expect(total).toBe(1200);
+  });
+
+  it('resolve salário vigente pelo histórico do mês', () => {
+    const employee: Employee = {
+      id: 'e1',
+      name: 'Ana',
+      role: 'Dev',
+      salary: 3000,
+      bonus: 0,
+      pixKey: '',
+      paymentDay: 5,
+    };
+    const history: EmployeeCompensationHistory[] = [
+      {
+        id: 'h1',
+        employeeId: 'e1',
+        effectiveMonth: '1970-01',
+        salary: 3000,
+        bonus: 0,
+      },
+      {
+        id: 'h2',
+        employeeId: 'e1',
+        effectiveMonth: '2026-05',
+        salary: 2500,
+        bonus: 0,
+      },
+      {
+        id: 'h3',
+        employeeId: 'e1',
+        effectiveMonth: '2026-06',
+        salary: 3200,
+        bonus: 200,
+      },
+    ];
+
+    expect(getEmployeeCompensationForMonth(employee, history, '2026-04')).toEqual({
+      salary: 3000,
+      bonus: 0,
+    });
+    expect(getEmployeeCompensationForMonth(employee, history, '2026-05')).toEqual({
+      salary: 2500,
+      bonus: 0,
+    });
+    expect(getEmployeeCompensationForMonth(employee, history, '2026-07')).toEqual({
+      salary: 3200,
+      bonus: 200,
+    });
   });
 
   it('não conta lançamento de salário como despesa vinculada', () => {

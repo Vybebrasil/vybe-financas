@@ -1,18 +1,26 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Employee, Transaction, TransactionType, TransactionStatus, Category } from '../types';
+import { Employee, EmployeeCompensationHistory, Transaction, TransactionType, TransactionStatus, Category } from '../types';
 import { formatCurrency, formatDate } from '../utils';
-import { computeEmployeeAmountToPay, isPayrollDeduction } from '../src/services/employeePayroll';
+import {
+  computeEmployeeAmountToPay,
+  getEmployeeTotalOverpaymentVales,
+  isPayrollDeduction,
+} from '../src/services/employeePayroll';
 import { getCurrentMonthKey } from '../src/services/recurringLogic';
 import { getTransactionFilterDate } from '../src/services/transactionDates';
 import SettlementDateModal from './SettlementDateModal';
-import { X, User, Save, Edit2, FileText, DollarSign, Calendar, CreditCard, TrendingDown, ChevronDown, Clock, CheckCircle } from 'lucide-react';
+import { X, User, Save, Edit2, FileText, DollarSign, Calendar, CreditCard, TrendingDown, ChevronDown, Clock, CheckCircle, History } from 'lucide-react';
 
 interface EmployeeDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   employee: Employee | null;
   transactions: Transaction[];
-  onUpdateEmployee: (updatedEmployee: Employee) => void;
+  compensationHistory?: EmployeeCompensationHistory[];
+  onUpdateEmployee: (
+    updatedEmployee: Employee,
+    options?: { compensationEffectiveMonth?: string },
+  ) => void;
   /** Dar baixa (total/parcial) ou voltar para pendente, como no extrato. */
   onToggleStatus?: (id: string, paidDate?: string, partialAmount?: number) => void;
 }
@@ -22,6 +30,7 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
   onClose, 
   employee, 
   transactions,
+  compensationHistory = [],
   onUpdateEmployee,
   onToggleStatus,
 }) => {
@@ -29,10 +38,12 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
   
   // Form States
   const [formData, setFormData] = useState<Employee | null>(null);
+  const [compensationEffectiveMonth, setCompensationEffectiveMonth] = useState(getCurrentMonthKey());
 
   useEffect(() => {
     if (employee) {
       setFormData({ ...employee });
+      setCompensationEffectiveMonth(getCurrentMonthKey());
     }
   }, [employee]);
 
@@ -61,6 +72,18 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
       .filter((t) => t.status === TransactionStatus.PAID)
       .reduce((acc, curr) => acc + curr.amount, 0);
   }, [history]);
+
+  const totalOverpaymentVales = useMemo(() => {
+    if (!employee) return 0;
+    return getEmployeeTotalOverpaymentVales(employee, transactions, compensationHistory);
+  }, [employee, transactions, compensationHistory]);
+
+  const employeeSalaryHistory = useMemo(() => {
+    if (!employee) return [];
+    return compensationHistory
+      .filter((entry) => entry.employeeId === employee.id && entry.effectiveMonth !== '1970-01')
+      .sort((a, b) => b.effectiveMonth.localeCompare(a.effectiveMonth));
+  }, [employee, compensationHistory]);
 
   // Total de vales pendentes (qualquer mês)
   const pendingValesTotal = useMemo(() => {
@@ -125,7 +148,14 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
   if (!isOpen || !formData || !employee) return null;
 
   const handleSave = () => {
-    onUpdateEmployee(formData);
+    if (!formData || !employee) return;
+    const salaryChanged = formData.salary !== employee.salary;
+    const bonusChanged = (formData.bonus ?? 0) !== (employee.bonus ?? 0);
+    if (salaryChanged || bonusChanged) {
+      onUpdateEmployee(formData, { compensationEffectiveMonth });
+    } else {
+      onUpdateEmployee(formData);
+    }
     setIsEditing(false);
   };
 
@@ -268,6 +298,49 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                                 </div>
                             </div>
 
+                            {isEditing && (
+                              <div>
+                                <label className="text-xs text-gray-500 block mb-1">
+                                  Salário/bônus válidos a partir de
+                                </label>
+                                <input
+                                  type="month"
+                                  className="w-full bg-vybe-card border border-gray-700 rounded p-2 text-sm text-white focus:border-vybe-accent outline-none"
+                                  value={compensationEffectiveMonth}
+                                  onChange={(e) => setCompensationEffectiveMonth(e.target.value)}
+                                />
+                                <p className="text-[10px] text-gray-600 mt-1">
+                                  Usado no cálculo de vales de meses anteriores e futuros.
+                                </p>
+                              </div>
+                            )}
+
+                            {!isEditing && employeeSalaryHistory.length > 0 && (
+                              <div className="bg-[#1E1E1E] rounded-lg border border-gray-800 p-3">
+                                <p className="text-[10px] uppercase tracking-wide text-gray-500 mb-2 flex items-center gap-1">
+                                  <History size={10} /> Histórico salarial
+                                </p>
+                                <ul className="space-y-1">
+                                  {employeeSalaryHistory.map((entry) => (
+                                    <li
+                                      key={`${entry.employeeId}-${entry.effectiveMonth}`}
+                                      className="flex justify-between text-xs text-gray-400"
+                                    >
+                                      <span>{formatMonthLabel(entry.effectiveMonth)}</span>
+                                      <span className="text-white">
+                                        {formatCurrency(entry.salary)}
+                                        {(entry.bonus ?? 0) > 0 && (
+                                          <span className="text-gray-500">
+                                            {' '}+ {formatCurrency(entry.bonus)} bônus
+                                          </span>
+                                        )}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
                             {payroll && (
                               <div className="bg-[#1E1E1E] rounded-lg border border-amber-900/30 p-3 space-y-1">
                                 <div className="flex justify-between text-xs">
@@ -376,6 +449,10 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                                         <Clock size={12} /> Vales pendentes: {formatCurrency(pendingValesTotal)}
                                     </span>
                                 )}
+                                <span>
+                                    <span className="text-gray-500">Total em vales: </span>
+                                    <span className="text-yellow-400 font-bold">{formatCurrency(totalOverpaymentVales)}</span>
+                                </span>
                                 <span>
                                     <span className="text-gray-500">Total Pago: </span>
                                     <span className="text-white font-bold">{formatCurrency(totalPaid)}</span>

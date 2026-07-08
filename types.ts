@@ -130,6 +130,15 @@ export interface Employee {
   observations?: string;
 }
 
+/** Salário + bônus vigentes a partir de um mês (YYYY-MM). */
+export interface EmployeeCompensationHistory {
+  id: string;
+  employeeId: string;
+  effectiveMonth: string;
+  salary: number;
+  bonus: number;
+}
+
 // PaymentMethod já foi definido acima, reutilizando para Subscription
 export interface Subscription {
   id: string;

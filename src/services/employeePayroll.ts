@@ -1,6 +1,7 @@
 import {
   Category,
   Employee,
+  EmployeeCompensationHistory,
   Transaction,
   TransactionStatus,
   TransactionType,
@@ -80,6 +81,74 @@ export const EMPLOYEE_VALE_PRESETS = [
 ] as const;
 
 export type EmployeeValePreset = (typeof EMPLOYEE_VALE_PRESETS)[number];
+
+/** Salário + bônus vigentes em um mês, usando histórico quando existir. */
+export function getEmployeeCompensationForMonth(
+  employee: Employee,
+  history: EmployeeCompensationHistory[],
+  monthKey: string,
+): { salary: number; bonus: number } {
+  const employeeHistory = history
+    .filter((entry) => entry.employeeId === employee.id)
+    .sort((a, b) => b.effectiveMonth.localeCompare(a.effectiveMonth));
+
+  const match = employeeHistory.find((entry) => entry.effectiveMonth <= monthKey);
+  if (match) {
+    return { salary: match.salary, bonus: match.bonus };
+  }
+
+  return {
+    salary: Number(employee.salary) || 0,
+    bonus: Number(employee.bonus) || 0,
+  };
+}
+
+/** Excesso pago no mês acima de salário + bônus (vale = quanto foi pago a mais). */
+export function computeEmployeeMonthlyOverpaymentVales(
+  employee: Employee,
+  transactions: Transaction[],
+  compensationHistory: EmployeeCompensationHistory[] = [],
+): { byMonth: Map<string, number>; total: number } {
+  const paidByMonth = new Map<string, number>();
+
+  for (const t of transactions) {
+    if (t.type !== TransactionType.EXPENSE) continue;
+    if (t.employeeId !== employee.id) continue;
+    if (t.status !== TransactionStatus.PAID) continue;
+    const key = getTransactionFilterDate(t).slice(0, 7);
+    paidByMonth.set(key, (paidByMonth.get(key) ?? 0) + t.amount);
+  }
+
+  const byMonth = new Map<string, number>();
+  let total = 0;
+  for (const [monthKey, paid] of paidByMonth) {
+    const { salary, bonus } = getEmployeeCompensationForMonth(
+      employee,
+      compensationHistory,
+      monthKey,
+    );
+    const entitlement = salary + bonus;
+    const excess = Math.max(0, paid - entitlement);
+    if (excess > 0) {
+      byMonth.set(monthKey, excess);
+      total += excess;
+    }
+  }
+
+  return { byMonth, total };
+}
+
+export function getEmployeeTotalOverpaymentVales(
+  employee: Employee,
+  transactions: Transaction[],
+  compensationHistory: EmployeeCompensationHistory[] = [],
+): number {
+  return computeEmployeeMonthlyOverpaymentVales(
+    employee,
+    transactions,
+    compensationHistory,
+  ).total;
+}
 
 export function buildValeDescription(preset: string, employeeName: string, custom?: string): string {
   const base = custom?.trim() || preset.trim();

@@ -4,6 +4,7 @@ import {
   Client,
   Contract,
   Employee,
+  EmployeeCompensationHistory,
   Subscription,
   TransactionType,
   Category,
@@ -170,6 +171,36 @@ const mapEmployeeToDB = (e: Omit<Employee, 'id'>, userId: string) => ({
   payment_day: e.paymentDay,
   observations: e.observations || null,
 });
+
+const mapCompensationHistoryFromDB = (
+  row: Record<string, unknown>,
+): EmployeeCompensationHistory => ({
+  id: row.id as string,
+  employeeId: row.employee_id as string,
+  effectiveMonth: row.effective_month as string,
+  salary: Number(row.salary),
+  bonus: Number(row.bonus) || 0,
+});
+
+const upsertEmployeeCompensationHistory = async (
+  employeeId: string,
+  ownerId: string,
+  effectiveMonth: string,
+  salary: number,
+  bonus: number,
+) => {
+  const { error } = await supabase.from('employee_compensation_history').upsert(
+    {
+      employee_id: employeeId,
+      user_id: ownerId,
+      effective_month: effectiveMonth,
+      salary,
+      bonus: bonus ?? 0,
+    },
+    { onConflict: 'employee_id,effective_month' },
+  );
+  if (error) throw error;
+};
 
 const mapSubscriptionFromDB = (s: Record<string, unknown>): Subscription => ({
   id: s.id as string,
@@ -613,10 +644,25 @@ export const api = {
         .single();
 
       if (error) throw error;
-      return mapEmployeeFromDB(data);
+      const created = mapEmployeeFromDB(data);
+
+      const monthKey = new Date().toISOString().slice(0, 7);
+      await upsertEmployeeCompensationHistory(
+        created.id,
+        ownerId,
+        monthKey,
+        created.salary,
+        created.bonus ?? 0,
+      );
+
+      return created;
     },
 
-    async update(id: string, employee: Employee) {
+    async update(
+      id: string,
+      employee: Employee,
+      options?: { compensationEffectiveMonth?: string },
+    ) {
       const { user, ownerId } = await requireWorkspace();
       const { error } = await supabase
         .from('employees')
@@ -625,6 +671,16 @@ export const api = {
         .eq('user_id', ownerId);
 
       if (error) throw error;
+
+      if (options?.compensationEffectiveMonth) {
+        await upsertEmployeeCompensationHistory(
+          id,
+          ownerId,
+          options.compensationEffectiveMonth,
+          employee.salary,
+          employee.bonus ?? 0,
+        );
+      }
     },
 
     async delete(id: string) {
@@ -698,6 +754,20 @@ export const api = {
         .eq('user_id', ownerId);
 
       if (error) throw error;
+    },
+  },
+
+  employeeCompensationHistory: {
+    async list() {
+      const { ownerId } = await requireWorkspace();
+      const { data, error } = await supabase
+        .from('employee_compensation_history')
+        .select('*')
+        .eq('user_id', ownerId)
+        .order('effective_month', { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []).map(mapCompensationHistoryFromDB);
     },
   },
 

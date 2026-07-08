@@ -57,6 +57,7 @@ const AppShell: React.FC = () => {
     clients,
     contracts,
     employees,
+    employeeCompensationHistory,
     handleAddContract,
     handleUpdateContract,
     handleDeleteContract,
@@ -188,6 +189,7 @@ const AppShell: React.FC = () => {
         onClose={() => setIsEmployeeModalOpen(false)}
         employee={selectedEmployee}
         transactions={transactions}
+        compensationHistory={employeeCompensationHistory}
         onUpdateEmployee={handleUpdateEmployee}
       />
 

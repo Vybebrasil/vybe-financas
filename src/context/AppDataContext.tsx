@@ -13,6 +13,7 @@ import {
   Client,
   Contract,
   Employee,
+  EmployeeCompensationHistory,
   Subscription,
   CompanySettings,
   DashboardSummary,
@@ -84,6 +85,7 @@ export interface AppDataContextValue {
   clients: Client[];
   contracts: Contract[];
   employees: Employee[];
+  employeeCompensationHistory: EmployeeCompensationHistory[];
   subscriptions: Subscription[];
   companySettings: CompanySettings;
   summary: DashboardSummary;
@@ -129,7 +131,10 @@ export interface AppDataContextValue {
   handleDeleteContract: (id: string) => void;
   handleAddEmployee: (emp: Employee) => Promise<void>;
   handleDeleteEmployee: (id: string) => void;
-  handleUpdateEmployee: (updatedEmployee: Employee) => Promise<void>;
+  handleUpdateEmployee: (
+    updatedEmployee: Employee,
+    options?: { compensationEffectiveMonth?: string },
+  ) => Promise<void>;
   handleOpenEmployeeDetails: (emp: Employee) => void;
   handleAddSubscription: (sub: Subscription) => Promise<void>;
   handleUpdateSubscription: (updatedSub: Subscription) => Promise<void>;
@@ -206,6 +211,9 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employeeCompensationHistory, setEmployeeCompensationHistory] = useState<
+    EmployeeCompensationHistory[]
+  >([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [reportsDateFilter, setReportsDateFilter] = useState<ReportsDateFilter | null>(null);
@@ -348,6 +356,14 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
 
       const empData = await api.employees.list();
       setEmployees(empData);
+
+      try {
+        const compensationData = await api.employeeCompensationHistory.list();
+        setEmployeeCompensationHistory(compensationData);
+      } catch (compensationErr) {
+        console.warn('Histórico salarial indisponível:', compensationErr);
+        setEmployeeCompensationHistory([]);
+      }
 
       const subData = await api.subscriptions.list();
       setSubscriptions(subData);
@@ -850,6 +866,17 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       const { id: _id, ...rest } = emp;
       const newEmp = await api.employees.create(rest);
       setEmployees((prev) => [...prev, newEmp]);
+      const monthKey = new Date().toISOString().slice(0, 7);
+      setEmployeeCompensationHistory((prev) => [
+        ...prev,
+        {
+          id: `local-${newEmp.id}-${monthKey}`,
+          employeeId: newEmp.id,
+          effectiveMonth: monthKey,
+          salary: newEmp.salary,
+          bonus: newEmp.bonus ?? 0,
+        },
+      ]);
       await recordAudit(
         'employee.create',
         `Colaborador: ${newEmp.name}`,
@@ -883,13 +910,40 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     });
   };
 
-  const handleUpdateEmployee = async (updatedEmployee: Employee) => {
+  const handleUpdateEmployee = async (
+    updatedEmployee: Employee,
+    options?: { compensationEffectiveMonth?: string },
+  ) => {
     try {
-      await api.employees.update(updatedEmployee.id, updatedEmployee);
+      await api.employees.update(updatedEmployee.id, updatedEmployee, options);
       setEmployees((prev) =>
         prev.map((e) => (e.id === updatedEmployee.id ? updatedEmployee : e)),
       );
       setSelectedEmployee(updatedEmployee);
+
+      if (options?.compensationEffectiveMonth) {
+        const month = options.compensationEffectiveMonth;
+        const nextEntry: EmployeeCompensationHistory = {
+          id: `local-${updatedEmployee.id}-${month}`,
+          employeeId: updatedEmployee.id,
+          effectiveMonth: month,
+          salary: updatedEmployee.salary,
+          bonus: updatedEmployee.bonus ?? 0,
+        };
+        setEmployeeCompensationHistory((prev) => {
+          const withoutMonth = prev.filter(
+            (entry) =>
+              !(
+                entry.employeeId === updatedEmployee.id &&
+                entry.effectiveMonth === month
+              ),
+          );
+          return [...withoutMonth, nextEntry].sort((a, b) =>
+            a.effectiveMonth.localeCompare(b.effectiveMonth),
+          );
+        });
+      }
+
       await recordAudit(
         'employee.update',
         `Colaborador editado: ${updatedEmployee.name}`,
@@ -1086,6 +1140,7 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     clients,
     contracts,
     employees,
+    employeeCompensationHistory,
     subscriptions,
     companySettings,
     summary,
