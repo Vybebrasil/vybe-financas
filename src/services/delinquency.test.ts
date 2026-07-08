@@ -133,8 +133,8 @@ describe('delinquency', () => {
     expect(pending?.label).toBe('Pendente');
   });
 
-  it('getClientPastDueTotal soma déficit de meses anteriores', () => {
-    // Mensalidade 2000; mês passado pagou 1500 → 500 em atraso
+  it('getClientPastDueTotal soma lançamentos pendentes de meses anteriores', () => {
+    // Restou 500 pendente em abril (ex.: baixa parcial) → 500 em atraso
     const pastDue = getClientPastDueTotal(
       client,
       [
@@ -149,13 +149,36 @@ describe('delinquency', () => {
           clientId: 'c1',
           paymentMethod: 'PIX',
         },
+        {
+          id: 't2',
+          description: 'Mensalidade - Empresa X',
+          amount: 500,
+          type: TransactionType.INCOME,
+          category: Category.CLIENT_PAYMENT,
+          date: '2026-04-05',
+          status: TransactionStatus.PENDING,
+          clientId: 'c1',
+          paymentMethod: 'PIX',
+        },
+        {
+          id: 't3',
+          description: 'Mensalidade - Empresa X',
+          amount: 2000,
+          type: TransactionType.INCOME,
+          category: Category.CLIENT_PAYMENT,
+          date: '2026-05-05',
+          status: TransactionStatus.PENDING,
+          clientId: 'c1',
+          paymentMethod: 'PIX',
+        },
       ],
       '2026-05',
     );
+    // Só o pendente de abril conta; o de maio é do mês atual
     expect(pastDue).toBe(500);
   });
 
-  it('getClientPastDueTotal zera quando meses anteriores foram quitados', () => {
+  it('getClientPastDueTotal zera sem lançamentos pendentes antigos', () => {
     const pastDue = getClientPastDueTotal(
       client,
       [
@@ -174,5 +197,40 @@ describe('delinquency', () => {
       '2026-05',
     );
     expect(pastDue).toBe(0);
+  });
+
+  it('badge fica pendente quando há pago parcial e pendente no mesmo mês', () => {
+    const badge = getClientMonthPaymentBadge(
+      getClientBillingSnapshot(
+        client,
+        [
+          {
+            id: 't1',
+            description: 'Mensalidade - Empresa X (parcial)',
+            amount: 1500,
+            type: TransactionType.INCOME,
+            category: Category.CLIENT_PAYMENT,
+            date: '2026-05-07',
+            status: TransactionStatus.PAID,
+            clientId: 'c1',
+            paymentMethod: 'PIX',
+          },
+          {
+            id: 't2',
+            description: 'Mensalidade - Empresa X',
+            amount: 500,
+            type: TransactionType.INCOME,
+            category: Category.CLIENT_PAYMENT,
+            date: '2026-05-05',
+            status: TransactionStatus.PENDING,
+            clientId: 'c1',
+            paymentMethod: 'PIX',
+          },
+        ],
+        '2026-05',
+        '2026-05-03',
+      ),
+    );
+    expect(badge?.label).toBe('Pendente');
   });
 });

@@ -68,37 +68,42 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({
     const ltv = totals.totalIncome;
     const avgMonthlyLtv = monthsActive > 0 ? ltv / monthsActive : 0;
 
-    // Pendente do mês: mensalidade contratada menos o que já foi pago no mês atual
     const currentMonthKey = new Date().toISOString().slice(0, 7);
-    const paidByMonth = new Map<string, number>();
-    for (const t of clientTransactions) {
-      if (t.type !== TransactionType.INCOME || t.status !== TransactionStatus.PAID) continue;
-      const key = t.date.slice(0, 7);
-      paidByMonth.set(key, (paidByMonth.get(key) ?? 0) + t.amount);
-    }
-    const paidThisMonth = paidByMonth.get(currentMonthKey) ?? 0;
-    const monthPending = Math.max(monthlyFee - paidThisMonth, 0);
 
-    // Pendente acumulado de meses anteriores: soma dos déficits mês a mês
-    // desde o primeiro mês com movimentação do cliente até o mês passado.
-    const allMonthKeys = clientTransactions
-      .filter((t) => t.type === TransactionType.INCOME)
-      .map((t) => t.date.slice(0, 7));
-    let pastDue = 0;
-    if (allMonthKeys.length > 0 && monthlyFee > 0) {
-      const firstMonthKey = allMonthKeys.reduce((min, k) => (k < min ? k : min));
-      let [y, m] = firstMonthKey.split('-').map(Number);
-      const [cy, cm] = currentMonthKey.split('-').map(Number);
-      while (y < cy || (y === cy && m < cm)) {
-        const key = `${y}-${String(m).padStart(2, '0')}`;
-        pastDue += Math.max(monthlyFee - (paidByMonth.get(key) ?? 0), 0);
-        m += 1;
-        if (m > 12) {
-          m = 1;
-          y += 1;
-        }
-      }
-    }
+    const paidThisMonth = clientTransactions
+      .filter(
+        (t) =>
+          t.type === TransactionType.INCOME &&
+          t.status === TransactionStatus.PAID &&
+          t.date.startsWith(currentMonthKey),
+      )
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    // Pendente do mês: lançamentos pendentes do mês atual;
+    // sem lançamento pendente, usa mensalidade menos o pago no mês.
+    const pendingTxThisMonth = clientTransactions
+      .filter(
+        (t) =>
+          t.type === TransactionType.INCOME &&
+          t.status === TransactionStatus.PENDING &&
+          t.date.startsWith(currentMonthKey),
+      )
+      .reduce((sum, t) => sum + t.amount, 0);
+    const monthPending =
+      pendingTxThisMonth > 0
+        ? pendingTxThisMonth
+        : Math.max(monthlyFee - paidThisMonth, 0);
+
+    // Em atraso: soma dos lançamentos pendentes de meses anteriores.
+    const pastDue = clientTransactions
+      .filter(
+        (t) =>
+          t.type === TransactionType.INCOME &&
+          t.status === TransactionStatus.PENDING &&
+          t.date.slice(0, 7) < currentMonthKey,
+      )
+      .reduce((sum, t) => sum + t.amount, 0);
+
     const totalPending = pastDue + monthPending;
 
     return {
@@ -189,7 +194,7 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({
                 </span>
                 <span className="text-[10px] text-gray-500 block mt-1">
                   {stats.monthPending > 0
-                    ? `Pago ${formatCurrency(stats.paidThisMonth)} de ${formatCurrency(client.monthlyFee)}`
+                    ? `Mensalidade ${formatCurrency(client.monthlyFee)} · pago ${formatCurrency(stats.paidThisMonth)} no mês`
                     : 'Mensalidade do mês quitada'}
                 </span>
              </div>
@@ -204,7 +209,7 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({
                   {stats.totalPending === 0
                     ? 'Nenhum pagamento em atraso'
                     : stats.pastDue > 0
-                      ? `${formatCurrency(stats.pastDue)} de meses anteriores + ${formatCurrency(stats.monthPending)} do mês`
+                      ? `${formatCurrency(stats.pastDue)} em atraso de meses anteriores + ${formatCurrency(stats.monthPending)} do mês`
                       : 'Apenas o pendente do mês atual'}
                 </span>
              </div>

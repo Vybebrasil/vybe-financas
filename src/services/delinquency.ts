@@ -45,15 +45,17 @@ export function getClientBillingSnapshot(
   let status: ClientBillingStatus = 'no_charge';
   let daysOverdue = 0;
 
-  if (paidTx) {
-    status = 'paid';
-  } else if (pendingTx) {
+  // Pendente tem prioridade: mesmo com pagamento parcial no mês,
+  // o que restou pendente mantém a mensalidade em aberto.
+  if (pendingTx) {
     status = today > dueDate ? 'overdue' : 'pending';
     if (status === 'overdue') {
       daysOverdue = Math.floor(
         (new Date(today).getTime() - new Date(dueDate).getTime()) / (1000 * 60 * 60 * 24),
       );
     }
+  } else if (paidTx) {
+    status = 'paid';
   } else if (client.contractStatus === 'Ativo') {
     // Sem lançamento no mês: não entra na régua (overdue/pending exigem transação PENDING).
     if (today > dueDate) {
@@ -75,50 +77,26 @@ export function getClientBillingSnapshot(
 }
 
 /**
- * Soma o que ficou faltando da mensalidade em cada mês anterior
- * (mensalidade contratada menos pagamentos confirmados no mês).
+ * Soma dos lançamentos de receita PENDENTES do cliente em meses anteriores
+ * ao mês atual (pagamentos em atraso reais, incluindo restos de baixa parcial).
  */
 export function getClientPastDueTotal(
   client: Client,
   transactions: Transaction[],
   currentMonthKey = getCurrentMonthKey(),
 ): number {
-  if (client.monthlyFee <= 0) return 0;
-
   const namePattern = `mensalidade - ${client.name}`.toLowerCase();
-  const clientIncome = transactions.filter(
-    (t) =>
-      t.type === TransactionType.INCOME &&
-      (t.clientId === client.id ||
-        (isClientPaymentCategory(t.category) &&
-          t.description.toLowerCase().includes(namePattern))),
-  );
-  if (clientIncome.length === 0) return 0;
-
-  const paidByMonth = new Map<string, number>();
-  for (const t of clientIncome) {
-    if (t.status !== TransactionStatus.PAID) continue;
-    const key = t.date.slice(0, 7);
-    paidByMonth.set(key, (paidByMonth.get(key) ?? 0) + t.amount);
-  }
-
-  const firstMonthKey = clientIncome
-    .map((t) => t.date.slice(0, 7))
-    .reduce((min, k) => (k < min ? k : min));
-
-  let pastDue = 0;
-  let [y, m] = firstMonthKey.split('-').map(Number);
-  const [cy, cm] = currentMonthKey.split('-').map(Number);
-  while (y < cy || (y === cy && m < cm)) {
-    const key = `${y}-${String(m).padStart(2, '0')}`;
-    pastDue += Math.max(client.monthlyFee - (paidByMonth.get(key) ?? 0), 0);
-    m += 1;
-    if (m > 12) {
-      m = 1;
-      y += 1;
-    }
-  }
-  return pastDue;
+  return transactions
+    .filter(
+      (t) =>
+        t.type === TransactionType.INCOME &&
+        t.status === TransactionStatus.PENDING &&
+        t.date.slice(0, 7) < currentMonthKey &&
+        (t.clientId === client.id ||
+          (isClientPaymentCategory(t.category) &&
+            t.description.toLowerCase().includes(namePattern))),
+    )
+    .reduce((sum, t) => sum + t.amount, 0);
 }
 
 export function getClientMonthPaymentBadge(snapshot: ClientBillingSnapshot): {
