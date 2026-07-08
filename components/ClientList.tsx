@@ -1,12 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { Client } from '../types';
+import { Client, Transaction } from '../types';
 import { formatCurrency } from '../utils';
+import {
+  getClientBillingSnapshot,
+  getClientMonthPaymentBadge,
+} from '../src/services/delinquency';
 import { Trash2, Phone, User, DollarSign, Calendar, Pencil, Search, AlertCircle, FileText, ArrowUpDown, Link2 } from 'lucide-react';
 
 type ClientSortBy = 'dueDay' | 'name' | 'monthlyFee';
 
 interface ClientListProps {
   clients: Client[];
+  transactions: Transaction[];
   onDeleteClient: (id: string) => void;
   onEditClient: (client: Client) => void;
   onGenerateCharge: (client: Client) => void;
@@ -14,7 +19,15 @@ interface ClientListProps {
   onSharePortalLink: (client: Client) => void;
 }
 
-const ClientList: React.FC<ClientListProps> = ({ clients, onDeleteClient, onEditClient, onGenerateCharge, onViewHistory, onSharePortalLink }) => {
+const ClientList: React.FC<ClientListProps> = ({
+  clients,
+  transactions,
+  onDeleteClient,
+  onEditClient,
+  onGenerateCharge,
+  onViewHistory,
+  onSharePortalLink,
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<ClientSortBy>('dueDay');
 
@@ -39,6 +52,15 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onDeleteClient, onEdit
       }
     });
   }, [clients, searchTerm, sortBy]);
+
+  const monthPaymentBadges = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof getClientMonthPaymentBadge>>();
+    for (const client of clients) {
+      const snapshot = getClientBillingSnapshot(client, transactions);
+      map.set(client.id, getClientMonthPaymentBadge(snapshot));
+    }
+    return map;
+  }, [clients, transactions]);
 
   const checkIsDueSoon = (dueDay: number) => {
     const today = new Date();
@@ -118,6 +140,7 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onDeleteClient, onEdit
             <tbody>
               {filteredClients.map((client) => {
                 const isDueSoon = checkIsDueSoon(client.dueDay);
+                const monthBadge = monthPaymentBadges.get(client.id);
 
                 return (
                   <tr
@@ -131,9 +154,19 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onDeleteClient, onEdit
                         <span className="text-xs text-gray-400 flex items-center gap-1 w-fit">
                           <span className="bg-[#121212] px-1 rounded border border-gray-700">{client.activePlan}</span>
                         </span>
-                        <div className="text-xs text-gray-500 mt-2 md:hidden">
-                          Fee: {formatCurrency(client.monthlyFee)} | Venc: dia {client.dueDay}
-                          {isDueSoon && <span className="text-amber-500 font-bold ml-1">(! Próximo)</span>}
+                        <div className="text-xs text-gray-500 mt-2 md:hidden flex flex-wrap items-center gap-1.5">
+                          <span>
+                            Fee: {formatCurrency(client.monthlyFee)} | Venc: dia {client.dueDay}
+                            {isDueSoon && <span className="text-amber-500 font-bold ml-1">(! Próximo)</span>}
+                          </span>
+                          {monthBadge && (
+                            <span
+                              className={`text-[10px] w-fit px-2 py-0.5 rounded-full ${monthBadge.className}`}
+                              title={monthBadge.title}
+                            >
+                              {monthBadge.label}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -168,9 +201,25 @@ const ClientList: React.FC<ClientListProps> = ({ clients, onDeleteClient, onEdit
                           )}
                         </div>
 
-                        <span className={`text-[10px] w-fit px-2 py-0.5 rounded-full mt-1 ${client.contractStatus === 'Ativo' ? 'bg-vybe-green/10 text-vybe-green' : 'bg-red-500/10 text-red-500'}`}>
-                          {client.contractStatus}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          <span
+                            className={`text-[10px] w-fit px-2 py-0.5 rounded-full ${
+                              client.contractStatus === 'Ativo'
+                                ? 'bg-vybe-green/10 text-vybe-green'
+                                : 'bg-red-500/10 text-red-500'
+                            }`}
+                          >
+                            {client.contractStatus}
+                          </span>
+                          {monthBadge && (
+                            <span
+                              className={`text-[10px] w-fit px-2 py-0.5 rounded-full ${monthBadge.className}`}
+                              title={monthBadge.title}
+                            >
+                              {monthBadge.label}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
 

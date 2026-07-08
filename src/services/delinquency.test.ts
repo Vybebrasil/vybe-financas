@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getDelinquencyReport, getClientBillingSnapshot } from './delinquency';
+import { getDelinquencyReport, getClientBillingSnapshot, getClientMonthPaymentBadge } from './delinquency';
 import { Client, Transaction, TransactionType, TransactionStatus, Category } from '../../types';
 
 const client: Client = {
@@ -86,5 +86,50 @@ describe('delinquency', () => {
       '2026-05',
     );
     expect(report.overdue.length + report.pending.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it('badge do mês: pago e pendente', () => {
+    const paid = getClientMonthPaymentBadge(
+      getClientBillingSnapshot(
+        client,
+        [
+          {
+            id: 't2',
+            description: 'Mensalidade - Empresa X',
+            amount: 2000,
+            type: TransactionType.INCOME,
+            category: Category.CLIENT_PAYMENT,
+            date: '2026-05-05',
+            status: TransactionStatus.PAID,
+            clientId: 'c1',
+            paymentMethod: 'PIX',
+          },
+        ],
+        '2026-05',
+      ),
+    );
+    expect(paid?.label).toBe('Pago');
+
+    const pending = getClientMonthPaymentBadge(
+      getClientBillingSnapshot(
+        client,
+        [
+          {
+            id: 't3',
+            description: 'Mensalidade - Empresa X',
+            amount: 2000,
+            type: TransactionType.INCOME,
+            category: Category.CLIENT_PAYMENT,
+            date: '2026-05-05',
+            status: TransactionStatus.PENDING,
+            clientId: 'c1',
+            paymentMethod: 'PIX',
+          },
+        ],
+        '2026-05',
+        '2026-05-03',
+      ),
+    );
+    expect(pending?.label).toBe('Pendente');
   });
 });

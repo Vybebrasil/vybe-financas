@@ -40,7 +40,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
   const [settlingTransaction, setSettlingTransaction] = useState<Transaction | null>(null);
 
   const filterSelectClass =
-    'vybe-filter-select min-w-0 max-w-[8.5rem] sm:max-w-none p-2 pr-6 outline-none cursor-pointer border-r border-gray-600/80 last:border-0 focus:ring-1 focus:ring-vybe-accent/50 rounded-sm';
+    'vybe-filter-select min-w-0 max-w-full border border-gray-700 rounded-lg px-2.5 py-2 outline-none cursor-pointer hover:border-gray-500 focus:border-vybe-accent transition-colors';
 
   const handleStatusClick = (transaction: Transaction) => {
     if (transaction.status === TransactionStatus.PENDING) {
@@ -169,107 +169,112 @@ const TransactionList: React.FC<TransactionListProps> = ({
         onConfirm={handleConfirmSettlement}
       />
       <div className="p-6 border-b border-gray-800">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+        <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2 shrink-0">
             <span className="w-1 h-6 bg-vybe-accent rounded-full"></span>
             Extrato
           </h2>
 
           {/* Área de Filtros */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 bg-[#121212] p-1 rounded-lg border border-gray-700 max-w-full overflow-x-auto">
-              <Filter size={14} className="text-vybe-muted ml-2 shrink-0" />
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end min-w-0">
+            <span
+              className="hidden sm:flex items-center justify-center w-8 h-8 rounded-lg bg-[#121212] border border-gray-700 text-vybe-muted shrink-0"
+              title="Filtros do extrato"
+            >
+              <Filter size={14} />
+            </span>
 
-              {/* Filtro Mês */}
+            {/* Filtro Mês */}
+            <select
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              className={filterSelectClass}
+              aria-label="Filtrar por mês"
+            >
+              <option value="all">Todos os Meses</option>
+              {months.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+
+            {/* Filtro Ano */}
+            <select
+              value={filterYear}
+              onChange={(e) => setFilterYear(e.target.value)}
+              className={filterSelectClass}
+              aria-label="Filtrar por ano"
+            >
+              <option value="all">Todos os Anos</option>
+              {availableYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+
+            {/* Filtro Entrada / Saída */}
+            <select
+              value={filterType}
+              onChange={(e) =>
+                setFilterType(e.target.value as 'all' | TransactionType)
+              }
+              className={filterSelectClass}
+              aria-label="Filtrar por entrada ou saída"
+            >
+              <option value="all">Entradas e saídas</option>
+              <option value={TransactionType.INCOME}>Entradas</option>
+              <option value={TransactionType.EXPENSE}>Saídas</option>
+              <option value={TransactionType.TRANSFER}>Transferências</option>
+            </select>
+
+            {/* Filtro Categoria */}
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className={filterSelectClass}
+              aria-label="Filtrar por categoria"
+            >
+              <option value="all">Todas as Categorias</option>
+              {categoriesForFilter.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+
+            {/* Filtro Status */}
+            <select
+              value={filterStatus}
+              onChange={(e) =>
+                setFilterStatus(e.target.value as 'all' | TransactionStatus)
+              }
+              className={filterSelectClass}
+              aria-label="Filtrar por status"
+            >
+              <option value="all">Todos os status</option>
+              <option value={TransactionStatus.PENDING}>Pendentes</option>
+              <option value={TransactionStatus.PAID}>Pagos</option>
+            </select>
+
+            {bankAccounts.length > 0 && (
               <select
-                value={filterMonth}
-                onChange={(e) => setFilterMonth(e.target.value)}
+                value={filterBankAccount}
+                onChange={(e) => setFilterBankAccount(e.target.value)}
                 className={filterSelectClass}
-                aria-label="Filtrar por mês"
+                aria-label="Filtrar por conta bancária"
               >
-                <option value="all">Todos os Meses</option>
-                {months.map(m => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
+                <option value="all">Todas as contas</option>
+                <option value="none">Sem conta</option>
+                {bankAccounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
               </select>
-
-              {/* Filtro Ano */}
-              <select
-                value={filterYear}
-                onChange={(e) => setFilterYear(e.target.value)}
-                className={filterSelectClass}
-                aria-label="Filtrar por ano"
-              >
-                <option value="all">Todos os Anos</option>
-                {availableYears.map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-
-              {/* Filtro Entrada / Saída */}
-              <select
-                value={filterType}
-                onChange={(e) =>
-                  setFilterType(e.target.value as 'all' | TransactionType)
-                }
-                className={filterSelectClass}
-                aria-label="Filtrar por entrada ou saída"
-              >
-                <option value="all">Entradas e saídas</option>
-                <option value={TransactionType.INCOME}>Entradas</option>
-                <option value={TransactionType.EXPENSE}>Saídas</option>
-                <option value={TransactionType.TRANSFER}>Transferências</option>
-              </select>
-
-              {/* Filtro Categoria */}
-              <select
-                value={filterCategory}
-                onChange={(e) => setFilterCategory(e.target.value)}
-                className={filterSelectClass}
-                aria-label="Filtrar por categoria"
-              >
-                <option value="all">Todas as Categorias</option>
-                {categoriesForFilter.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-
-              <select
-                value={filterStatus}
-                onChange={(e) =>
-                  setFilterStatus(e.target.value as 'all' | TransactionStatus)
-                }
-                className={filterSelectClass}
-                aria-label="Filtrar por status"
-              >
-                <option value="all">Todos os status</option>
-                <option value={TransactionStatus.PENDING}>Pendentes</option>
-                <option value={TransactionStatus.PAID}>Pagos</option>
-              </select>
-
-              {bankAccounts.length > 0 && (
-                <select
-                  value={filterBankAccount}
-                  onChange={(e) => setFilterBankAccount(e.target.value)}
-                  className={filterSelectClass}
-                  aria-label="Filtrar por conta bancária"
-                >
-                  <option value="all">Todas as contas</option>
-                  <option value="none">Sem conta</option>
-                  {bankAccounts.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name}</option>
-                  ))}
-                </select>
-              )}
-            </div>
+            )}
 
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
-                className="text-xs text-vybe-muted hover:text-white flex items-center gap-1 px-2 py-1"
+                className="flex items-center gap-1 h-[34px] px-2.5 text-xs text-vybe-muted hover:text-white bg-[#121212] border border-gray-700 hover:border-gray-500 rounded-lg transition-colors shrink-0"
                 title="Limpar Filtros"
               >
                 <XCircle size={14} />
+                <span className="hidden lg:inline">Limpar</span>
               </button>
             )}
           </div>

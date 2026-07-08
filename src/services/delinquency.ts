@@ -74,6 +74,47 @@ export function getClientBillingSnapshot(
   };
 }
 
+export function getClientMonthPaymentBadge(snapshot: ClientBillingSnapshot): {
+  label: 'Pago' | 'Pendente';
+  title: string;
+  className: string;
+} | null {
+  if (snapshot.client.contractStatus !== 'Ativo') return null;
+
+  if (snapshot.status === 'paid') {
+    return {
+      label: 'Pago',
+      title: 'Mensalidade do mês quitada',
+      className: 'bg-vybe-green/10 text-vybe-green',
+    };
+  }
+
+  if (
+    snapshot.status === 'pending' ||
+    snapshot.status === 'overdue' ||
+    snapshot.status === 'upcoming' ||
+    snapshot.status === 'missing_launch'
+  ) {
+    const title =
+      snapshot.status === 'overdue'
+        ? `Mensalidade em atraso (${snapshot.daysOverdue} dia(s))`
+        : snapshot.status === 'missing_launch'
+          ? 'Sem lançamento de mensalidade neste mês'
+          : 'Mensalidade pendente neste mês';
+
+    return {
+      label: 'Pendente',
+      title,
+      className:
+        snapshot.status === 'overdue'
+          ? 'bg-red-500/10 text-red-400'
+          : 'bg-yellow-500/10 text-yellow-500',
+    };
+  }
+
+  return null;
+}
+
 export function getDelinquencyReport(
   clients: Client[],
   transactions: Transaction[],

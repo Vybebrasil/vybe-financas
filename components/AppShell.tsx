@@ -354,6 +354,7 @@ const AppShell: React.FC = () => {
             />
             <ClientList
               clients={clients}
+              transactions={transactions}
               onDeleteClient={handleDeleteClient}
               onEditClient={setEditingClient}
               onGenerateCharge={handleOpenBillingModal}
