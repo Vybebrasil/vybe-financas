@@ -179,6 +179,7 @@ const AppShell: React.FC = () => {
         onClose={() => setIsHistoryModalOpen(false)}
         client={historyClient}
         transactions={transactions}
+        onToggleStatus={handleToggleTransactionStatus}
       />
 
       <EmployeeDetailsModal

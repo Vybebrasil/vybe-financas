@@ -1,17 +1,43 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Client, Transaction, TransactionType, TransactionStatus } from '../types';
 import { formatCurrency, formatDate } from '../utils';
 import { X, History, TrendingUp, TrendingDown, FileText, Gem, Clock, CheckCircle } from 'lucide-react';
+import SettlementDateModal from './SettlementDateModal';
 
 interface ClientHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   client: Client | null;
   transactions: Transaction[];
+  /** Dar baixa (total/parcial) ou voltar para pendente, como no extrato. */
+  onToggleStatus?: (id: string, paidDate?: string, partialAmount?: number) => void;
 }
 
-const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose, client, transactions }) => {
+const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({
+  isOpen,
+  onClose,
+  client,
+  transactions,
+  onToggleStatus,
+}) => {
+  const [settlingTransaction, setSettlingTransaction] = useState<Transaction | null>(null);
+
   if (!isOpen || !client) return null;
+
+  const handleStatusClick = (transaction: Transaction) => {
+    if (!onToggleStatus) return;
+    if (transaction.status === TransactionStatus.PENDING) {
+      setSettlingTransaction(transaction);
+      return;
+    }
+    onToggleStatus(transaction.id);
+  };
+
+  const handleConfirmSettlement = (paidDate: string, partialAmount?: number) => {
+    if (!settlingTransaction || !onToggleStatus) return;
+    onToggleStatus(settlingTransaction.id, paidDate, partialAmount);
+    setSettlingTransaction(null);
+  };
 
   const clientTransactions = useMemo(() => {
     const term = client.name.toLowerCase();
@@ -107,6 +133,11 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <SettlementDateModal
+        transaction={settlingTransaction}
+        onClose={() => setSettlingTransaction(null)}
+        onConfirm={handleConfirmSettlement}
+      />
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity" 
@@ -235,7 +266,21 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
                                <span className="bg-[#1E1E1E] px-2 py-1 rounded border border-gray-700">{t.category}</span>
                             </td>
                             <td className="p-3 text-center whitespace-nowrap">
-                               {isPaid ? (
+                               {onToggleStatus ? (
+                                  <button
+                                     type="button"
+                                     onClick={() => handleStatusClick(t)}
+                                     className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border transition-all ${
+                                        isPaid
+                                           ? 'bg-vybe-green/10 text-vybe-green border-vybe-green/20 hover:bg-vybe-green hover:text-white'
+                                           : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20 hover:bg-yellow-500 hover:text-white'
+                                     }`}
+                                     title={isPaid ? 'Pago — clique para voltar a pendente' : 'Pendente — clique para dar baixa (total ou parcial)'}
+                                  >
+                                     {isPaid ? <CheckCircle size={10} /> : <Clock size={10} />}
+                                     {isPaid ? 'Pago' : 'Pendente'}
+                                  </button>
+                               ) : isPaid ? (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-vybe-green/10 text-vybe-green border border-vybe-green/20">
                                      <CheckCircle size={10} /> Pago
                                   </span>
