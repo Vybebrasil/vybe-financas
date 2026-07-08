@@ -487,13 +487,13 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
             </h2>
             <p className="text-xs text-gray-500 mt-1">Gestão de equipe e pagamentos</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="bg-[#121212] px-4 py-2 rounded-lg border border-gray-700">
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-start md:justify-end">
+            <div className="bg-[#121212] px-4 py-2 rounded-lg border border-gray-700 shrink-0">
               <span className="text-xs text-gray-400 block">Custo Mensal</span>
               <span className="text-lg font-bold text-white">{formatCurrency(totalMonthlyPayroll)}</span>
             </div>
             <div
-              className={`bg-[#121212] px-4 py-2 rounded-lg border ${
+              className={`bg-[#121212] px-4 py-2 rounded-lg border shrink-0 ${
                 totalAmountToPay <= 0 ? 'border-green-900/40' : 'border-amber-900/40'
               }`}
             >
@@ -602,15 +602,15 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
             </h2>
             <p className="text-xs text-gray-500 mt-1">Softwares e Ferramentas Recorrentes</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="bg-[#121212] px-4 py-2 rounded-lg border border-gray-700">
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-start md:justify-end">
+            <div className="bg-[#121212] px-4 py-2 rounded-lg border border-gray-700 shrink-0">
               <span className="text-xs text-gray-400 block">Custo Mensal</span>
               <span className="text-lg font-bold text-white">
                 {formatCurrency(subscriptionsSummary.totalMonthlyCost)}
               </span>
             </div>
             <div
-              className={`bg-[#121212] px-4 py-2 rounded-lg border ${
+              className={`bg-[#121212] px-4 py-2 rounded-lg border shrink-0 ${
                 subscriptionsSummary.amountToPay <= 0 ? 'border-green-900/40' : 'border-amber-900/40'
               }`}
             >
