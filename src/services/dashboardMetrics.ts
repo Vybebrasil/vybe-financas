@@ -311,19 +311,10 @@ export function computeMonthlyForecastMetrics(params: {
     referenceMonthKey,
   );
 
-  let projectedIncomeTotal = 0;
-  let projectedExpenseTotal = 0;
-  for (let i = 1; i <= projectionMonths; i++) {
-    const mk = shiftMonthKey(referenceMonthKey, i);
-    projectedIncomeTotal += projectedIncomeForMonth(clients, transactions, mk);
-    projectedExpenseTotal += projectedExpenseForMonth(
-      clients,
-      employees,
-      subscriptions,
-      transactions,
-      mk,
-    );
-  }
+  const mrr = computeClientPortfolio(clients).mrr;
+  const monthlyRecurringExpense = computeFixedCosts(employees, subscriptions).total;
+  const projectedIncomeTotal = mrr * projectionMonths;
+  const projectedExpenseTotal = monthlyRecurringExpense * projectionMonths;
 
   return {
     referenceMonthKey,

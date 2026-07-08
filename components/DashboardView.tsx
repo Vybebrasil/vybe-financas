@@ -297,14 +297,14 @@ const DashboardView: React.FC = () => {
           />
           <DashboardCard
             title="Projeção entrada"
-            subtitle={`Próximos ${forecast.projectionMonthCount} meses (MRR + pendentes)`}
+            subtitle={`Próximos ${forecast.projectionMonthCount} meses (MRR)`}
             value={forecast.projectedIncomeTotal}
             type="income"
             icon={<TrendingUp size={20} />}
           />
           <DashboardCard
             title="Projeção saída"
-            subtitle={`Próximos ${forecast.projectionMonthCount} meses (recorrências + pendentes)`}
+            subtitle={`Próximos ${forecast.projectionMonthCount} meses (folha + aplicativos)`}
             value={forecast.projectedExpenseTotal}
             type="expense"
             icon={<TrendingDown size={20} />}

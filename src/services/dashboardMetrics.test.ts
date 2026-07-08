@@ -351,6 +351,38 @@ describe('dashboardMetrics', () => {
     ).toBe(1000);
   });
 
+  it('projeção de saída usa folha + aplicativos por mês', () => {
+    const range = getPeriodRange('this_month', new Date('2026-05-15'));
+    const f = computeMonthlyForecastMetrics({
+      clients: [],
+      employees: [
+        {
+          id: 'e1',
+          name: 'Ana',
+          role: 'Dev',
+          salary: 5000,
+          bonus: 0,
+          paymentDay: 5,
+        },
+      ],
+      subscriptions: [
+        {
+          id: 's1',
+          name: 'Figma',
+          cost: 500,
+          renewalDay: 5,
+          paymentMethod: 'CARTAO',
+          active: true,
+        },
+      ],
+      transactions: [],
+      range,
+      projectionMonths: 3,
+      ref: new Date('2026-05-15'),
+    });
+    expect(f.projectedExpenseTotal).toBe((5000 + 500) * 3);
+  });
+
   it('classifica assinaturas de apps pagas e pendentes no mês', () => {
     const subs: Subscription[] = [
       {
