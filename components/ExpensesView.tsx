@@ -296,6 +296,16 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
 
   const totalSubs = subscriptions.reduce((acc, curr) => acc + curr.cost, 0);
 
+  const sortedSubscriptions = useMemo(
+    () =>
+      [...subscriptions].sort((a, b) => {
+        const dayDiff = a.renewalDay - b.renewalDay;
+        if (dayDiff !== 0) return dayDiff;
+        return a.name.localeCompare(b.name, 'pt-BR');
+      }),
+    [subscriptions],
+  );
+
   const employeePayrollRows = useMemo(
     () =>
       employees.map((emp) => ({
@@ -596,10 +606,10 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
         </div>
 
         <div className="space-y-3">
-          {subscriptions.length === 0 && (
+          {sortedSubscriptions.length === 0 && (
             <p className="text-gray-500 text-sm italic">Nenhum software cadastrado.</p>
           )}
-          {subscriptions.map(sub => {
+          {sortedSubscriptions.map(sub => {
             const snapshot = getSubscriptionBillingSnapshot(sub, transactions, monthKey);
             const monthBadge = getSubscriptionMonthPaymentBadge(snapshot);
             const pastDue = getSubscriptionPastDueTotal(sub, transactions, monthKey);
