@@ -17,7 +17,7 @@ interface TransactionListProps {
   onDeleteTransaction: (id: string) => void;
   onEditTransaction?: (transaction: Transaction) => void;
   onGenerateReceipt?: (transaction: Transaction) => void;
-  onToggleStatus: (id: string, paidDate?: string) => void;
+  onToggleStatus: (id: string, paidDate?: string, partialAmount?: number) => void;
 }
 
 const TransactionList: React.FC<TransactionListProps> = ({
@@ -50,9 +50,9 @@ const TransactionList: React.FC<TransactionListProps> = ({
     onToggleStatus(transaction.id);
   };
 
-  const handleConfirmSettlement = (paidDate: string) => {
+  const handleConfirmSettlement = (paidDate: string, partialAmount?: number) => {
     if (!settlingTransaction) return;
-    onToggleStatus(settlingTransaction.id, paidDate);
+    onToggleStatus(settlingTransaction.id, paidDate, partialAmount);
     setSettlingTransaction(null);
   };
 

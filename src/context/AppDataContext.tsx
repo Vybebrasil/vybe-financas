@@ -116,7 +116,11 @@ export interface AppDataContextValue {
   handleDeleteTransaction: (id: string) => void;
   handleUpdateTransaction: (transaction: Transaction) => Promise<void>;
   handleEditTransaction: (transaction: Transaction) => void;
-  handleToggleTransactionStatus: (id: string, paidDate?: string) => Promise<void>;
+  handleToggleTransactionStatus: (
+    id: string,
+    paidDate?: string,
+    partialAmount?: number,
+  ) => Promise<void>;
   handleAddClient: (client: Client) => Promise<void>;
   handleUpdateClient: (updatedClient: Client) => Promise<void>;
   handleDeleteClient: (id: string) => void;
@@ -620,9 +624,58 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleToggleTransactionStatus = async (id: string, paidDate?: string) => {
+  const handleToggleTransactionStatus = async (
+    id: string,
+    paidDate?: string,
+    partialAmount?: number,
+  ) => {
     const transaction = transactions.find((t) => t.id === id);
     if (!transaction) return;
+
+    // Baixa parcial: cria lançamento pago com o valor informado
+    // e mantém o restante como pendente no lançamento original.
+    const isPartial =
+      transaction.status === TransactionStatus.PENDING &&
+      typeof partialAmount === 'number' &&
+      partialAmount > 0 &&
+      partialAmount < transaction.amount;
+
+    if (isPartial) {
+      const remaining = Math.round((transaction.amount - partialAmount) * 100) / 100;
+      const settleDate = paidDate ?? new Date().toISOString().split('T')[0];
+      try {
+        const { id: _originalId, receiptUrl: _receipt, ...base } = transaction;
+        const paidTx = await api.transactions.create({
+          ...base,
+          description: `${transaction.description} (parcial)`,
+          amount: partialAmount,
+          date: settleDate,
+          paidDate: settleDate,
+          status: TransactionStatus.PAID,
+        });
+        const updated = await api.transactions.update(id, {
+          ...transaction,
+          amount: remaining,
+        });
+        setTransactions((prev) => [
+          paidTx,
+          ...prev.map((t) => (t.id === id ? updated : t)),
+        ]);
+        await recordAudit(
+          'transaction.status',
+          `${transaction.description}: baixa parcial de R$ ${partialAmount.toFixed(2)} em ${settleDate} — restante R$ ${remaining.toFixed(2)} pendente`,
+          'transaction',
+          id,
+        );
+        toast.success(
+          `Baixa parcial registrada. Restam R$ ${remaining.toFixed(2)} pendentes.`,
+        );
+      } catch (error) {
+        console.error(error);
+        toast.error('Erro ao registrar baixa parcial.');
+      }
+      return;
+    }
 
     const newStatus =
       transaction.status === TransactionStatus.PAID

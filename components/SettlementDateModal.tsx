@@ -8,7 +8,8 @@ import { Calendar, CheckCircle, X } from 'lucide-react';
 interface SettlementDateModalProps {
   transaction: Transaction | null;
   onClose: () => void;
-  onConfirm: (paidDate: string) => void;
+  /** partialAmount presente = baixa parcial; o restante continua pendente. */
+  onConfirm: (paidDate: string, partialAmount?: number) => void;
 }
 
 const SettlementDateModal: React.FC<SettlementDateModalProps> = ({
@@ -17,10 +18,14 @@ const SettlementDateModal: React.FC<SettlementDateModalProps> = ({
   onConfirm,
 }) => {
   const [paidDate, setPaidDate] = useState('');
+  const [mode, setMode] = useState<'total' | 'partial'>('total');
+  const [partialValue, setPartialValue] = useState('');
 
   useEffect(() => {
     if (!transaction) return;
     setPaidDate(new Date().toISOString().split('T')[0]);
+    setMode('total');
+    setPartialValue('');
   }, [transaction]);
 
   if (!transaction) return null;
@@ -28,9 +33,23 @@ const SettlementDateModal: React.FC<SettlementDateModalProps> = ({
   const scheduledDate = getTransactionScheduledDate(transaction);
   const isIncome = transaction.type === TransactionType.INCOME;
 
+  const parsedPartial = parseFloat(partialValue.replace(',', '.'));
+  const partialValid =
+    !Number.isNaN(parsedPartial) &&
+    parsedPartial > 0 &&
+    parsedPartial < transaction.amount;
+  const remaining = partialValid
+    ? Math.round((transaction.amount - parsedPartial) * 100) / 100
+    : 0;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!paidDate) return;
+    if (mode === 'partial') {
+      if (!partialValid) return;
+      onConfirm(paidDate, parsedPartial);
+      return;
+    }
     onConfirm(paidDate);
   };
 
@@ -70,6 +89,65 @@ const SettlementDateModal: React.FC<SettlementDateModalProps> = ({
 
           <div>
             <label className="block text-xs text-vybe-muted mb-1.5 font-medium">
+              Tipo de baixa
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setMode('total')}
+                className={`py-2.5 rounded-lg border text-sm font-bold transition-colors ${
+                  mode === 'total'
+                    ? 'bg-vybe-green/15 border-vybe-green text-vybe-green'
+                    : 'bg-[#121212] border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'
+                }`}
+              >
+                Total
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('partial')}
+                className={`py-2.5 rounded-lg border text-sm font-bold transition-colors ${
+                  mode === 'partial'
+                    ? 'bg-yellow-500/15 border-yellow-500 text-yellow-500'
+                    : 'bg-[#121212] border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'
+                }`}
+              >
+                Parcial
+              </button>
+            </div>
+          </div>
+
+          {mode === 'partial' && (
+            <div>
+              <label className="block text-xs text-vybe-muted mb-1.5 font-medium">
+                Valor {isIncome ? 'recebido' : 'pago'} agora
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                max={transaction.amount - 0.01}
+                value={partialValue}
+                onChange={(e) => setPartialValue(e.target.value)}
+                placeholder={`Até ${formatCurrency(transaction.amount)}`}
+                required
+                autoFocus
+                className="w-full bg-[#121212] border border-gray-700 rounded-lg py-3 px-3 text-white focus:outline-none focus:border-vybe-accent focus:ring-1 focus:ring-vybe-accent placeholder-gray-600"
+              />
+              {partialValid ? (
+                <p className="text-[11px] text-yellow-500 mt-1.5">
+                  Restam {formatCurrency(remaining)} que continuam pendentes.
+                </p>
+              ) : partialValue !== '' ? (
+                <p className="text-[11px] text-red-400 mt-1.5">
+                  Informe um valor maior que zero e menor que {formatCurrency(transaction.amount)}.
+                </p>
+              ) : null}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs text-vybe-muted mb-1.5 font-medium">
               Data real da baixa
             </label>
             <div className="relative">
@@ -97,9 +175,10 @@ const SettlementDateModal: React.FC<SettlementDateModalProps> = ({
             </button>
             <button
               type="submit"
-              className="flex-1 py-2.5 rounded-lg bg-vybe-green text-white hover:bg-vybe-green/90 transition-colors text-sm font-bold"
+              disabled={mode === 'partial' && !partialValid}
+              className="flex-1 py-2.5 rounded-lg bg-vybe-green text-white hover:bg-vybe-green/90 transition-colors text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Confirmar baixa
+              {mode === 'partial' ? 'Confirmar baixa parcial' : 'Confirmar baixa'}
             </button>
           </div>
         </form>
