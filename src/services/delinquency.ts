@@ -74,6 +74,53 @@ export function getClientBillingSnapshot(
   };
 }
 
+/**
+ * Soma o que ficou faltando da mensalidade em cada mês anterior
+ * (mensalidade contratada menos pagamentos confirmados no mês).
+ */
+export function getClientPastDueTotal(
+  client: Client,
+  transactions: Transaction[],
+  currentMonthKey = getCurrentMonthKey(),
+): number {
+  if (client.monthlyFee <= 0) return 0;
+
+  const namePattern = `mensalidade - ${client.name}`.toLowerCase();
+  const clientIncome = transactions.filter(
+    (t) =>
+      t.type === TransactionType.INCOME &&
+      (t.clientId === client.id ||
+        (isClientPaymentCategory(t.category) &&
+          t.description.toLowerCase().includes(namePattern))),
+  );
+  if (clientIncome.length === 0) return 0;
+
+  const paidByMonth = new Map<string, number>();
+  for (const t of clientIncome) {
+    if (t.status !== TransactionStatus.PAID) continue;
+    const key = t.date.slice(0, 7);
+    paidByMonth.set(key, (paidByMonth.get(key) ?? 0) + t.amount);
+  }
+
+  const firstMonthKey = clientIncome
+    .map((t) => t.date.slice(0, 7))
+    .reduce((min, k) => (k < min ? k : min));
+
+  let pastDue = 0;
+  let [y, m] = firstMonthKey.split('-').map(Number);
+  const [cy, cm] = currentMonthKey.split('-').map(Number);
+  while (y < cy || (y === cy && m < cm)) {
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    pastDue += Math.max(client.monthlyFee - (paidByMonth.get(key) ?? 0), 0);
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return pastDue;
+}
+
 export function getClientMonthPaymentBadge(snapshot: ClientBillingSnapshot): {
   label: 'Pago' | 'Pendente';
   title: string;

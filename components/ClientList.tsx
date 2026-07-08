@@ -4,6 +4,7 @@ import { formatCurrency } from '../utils';
 import {
   getClientBillingSnapshot,
   getClientMonthPaymentBadge,
+  getClientPastDueTotal,
 } from '../src/services/delinquency';
 import { Trash2, Phone, User, DollarSign, Calendar, Pencil, Search, AlertCircle, FileText, ArrowUpDown, Link2 } from 'lucide-react';
 
@@ -58,6 +59,14 @@ const ClientList: React.FC<ClientListProps> = ({
     for (const client of clients) {
       const snapshot = getClientBillingSnapshot(client, transactions);
       map.set(client.id, getClientMonthPaymentBadge(snapshot));
+    }
+    return map;
+  }, [clients, transactions]);
+
+  const pastDueByClient = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const client of clients) {
+      map.set(client.id, getClientPastDueTotal(client, transactions));
     }
     return map;
   }, [clients, transactions]);
@@ -141,6 +150,7 @@ const ClientList: React.FC<ClientListProps> = ({
               {filteredClients.map((client) => {
                 const isDueSoon = checkIsDueSoon(client.dueDay);
                 const monthBadge = monthPaymentBadges.get(client.id);
+                const pastDue = pastDueByClient.get(client.id) ?? 0;
 
                 return (
                   <tr
@@ -159,6 +169,14 @@ const ClientList: React.FC<ClientListProps> = ({
                             Fee: {formatCurrency(client.monthlyFee)} | Venc: dia {client.dueDay}
                             {isDueSoon && <span className="text-amber-500 font-bold ml-1">(! Próximo)</span>}
                           </span>
+                          {pastDue > 0 && (
+                            <span
+                              className="text-[10px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20"
+                              title="Soma do que ficou pendente da mensalidade em meses anteriores"
+                            >
+                              {formatCurrency(pastDue)} em atraso
+                            </span>
+                          )}
                           {monthBadge && (
                             <span
                               className={`text-[10px] w-fit px-2 py-0.5 rounded-full ${monthBadge.className}`}
@@ -185,9 +203,20 @@ const ClientList: React.FC<ClientListProps> = ({
 
                     <td className="p-4 hidden md:table-cell">
                       <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2 text-sm text-vybe-green font-medium">
-                          <DollarSign size={14} />
-                          {formatCurrency(client.monthlyFee)}
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-vybe-green font-medium">
+                          <span className="flex items-center gap-2">
+                            <DollarSign size={14} />
+                            {formatCurrency(client.monthlyFee)}
+                          </span>
+                          {pastDue > 0 && (
+                            <span
+                              className="flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/20"
+                              title={`Soma do que ficou pendente da mensalidade em meses anteriores`}
+                            >
+                              <AlertCircle size={10} />
+                              {formatCurrency(pastDue)} em atraso
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-2 text-xs text-gray-400">

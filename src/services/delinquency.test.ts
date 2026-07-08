@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getDelinquencyReport, getClientBillingSnapshot, getClientMonthPaymentBadge } from './delinquency';
+import { getDelinquencyReport, getClientBillingSnapshot, getClientMonthPaymentBadge, getClientPastDueTotal } from './delinquency';
 import { Client, Transaction, TransactionType, TransactionStatus, Category } from '../../types';
 
 const client: Client = {
@@ -131,5 +131,48 @@ describe('delinquency', () => {
       ),
     );
     expect(pending?.label).toBe('Pendente');
+  });
+
+  it('getClientPastDueTotal soma déficit de meses anteriores', () => {
+    // Mensalidade 2000; mês passado pagou 1500 → 500 em atraso
+    const pastDue = getClientPastDueTotal(
+      client,
+      [
+        {
+          id: 't1',
+          description: 'Mensalidade - Empresa X',
+          amount: 1500,
+          type: TransactionType.INCOME,
+          category: Category.CLIENT_PAYMENT,
+          date: '2026-04-05',
+          status: TransactionStatus.PAID,
+          clientId: 'c1',
+          paymentMethod: 'PIX',
+        },
+      ],
+      '2026-05',
+    );
+    expect(pastDue).toBe(500);
+  });
+
+  it('getClientPastDueTotal zera quando meses anteriores foram quitados', () => {
+    const pastDue = getClientPastDueTotal(
+      client,
+      [
+        {
+          id: 't1',
+          description: 'Mensalidade - Empresa X',
+          amount: 2000,
+          type: TransactionType.INCOME,
+          category: Category.CLIENT_PAYMENT,
+          date: '2026-04-05',
+          status: TransactionStatus.PAID,
+          clientId: 'c1',
+          paymentMethod: 'PIX',
+        },
+      ],
+      '2026-05',
+    );
+    expect(pastDue).toBe(0);
   });
 });
