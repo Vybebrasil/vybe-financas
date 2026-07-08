@@ -4,7 +4,7 @@ import { formatCurrency, formatDate } from '../utils';
 import { computeEmployeeAmountToPay, isPayrollDeduction } from '../src/services/employeePayroll';
 import { getCurrentMonthKey } from '../src/services/recurringLogic';
 import { getTransactionFilterDate } from '../src/services/transactionDates';
-import { X, User, Save, Edit2, FileText, DollarSign, Calendar, CreditCard, TrendingDown } from 'lucide-react';
+import { X, User, Save, Edit2, FileText, DollarSign, Calendar, CreditCard, TrendingDown, ChevronDown } from 'lucide-react';
 
 interface EmployeeDetailsModalProps {
   isOpen: boolean;
@@ -55,6 +55,48 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
   const totalPaid = useMemo(() => {
     return history.reduce((acc, curr) => acc + curr.amount, 0);
   }, [history]);
+
+  // Histórico agrupado por mês (sanfona), do mais recente ao mais antigo
+  const groupedHistory = useMemo(() => {
+    const groups = new Map<string, { monthKey: string; items: Transaction[]; total: number }>();
+    for (const t of history) {
+      const key = getTransactionFilterDate(t).slice(0, 7);
+      const group = groups.get(key) ?? { monthKey: key, items: [], total: 0 };
+      group.items.push(t);
+      group.total += t.amount;
+      groups.set(key, group);
+    }
+    return [...groups.values()].sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+  }, [history]);
+
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    // Ao abrir/trocar de colaborador, expande só o mês mais recente
+    if (groupedHistory.length > 0) {
+      setExpandedMonths(new Set([groupedHistory[0].monthKey]));
+    } else {
+      setExpandedMonths(new Set());
+    }
+  }, [employee?.id, groupedHistory.length > 0 ? groupedHistory[0].monthKey : '']);
+
+  const toggleMonth = (key: string) => {
+    setExpandedMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const formatMonthLabel = (monthKey: string) => {
+    const [y, m] = monthKey.split('-').map(Number);
+    const label = new Date(y, m - 1, 1).toLocaleDateString('pt-BR', {
+      month: 'long',
+      year: 'numeric',
+    });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  };
 
   const payroll = useMemo(() => {
     if (!employee) return null;
@@ -299,26 +341,51 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                                     <p className="text-xs mt-1">Registre vales em Despesas ou pague o salário pelo botão $.</p>
                                 </div>
                             ) : (
-                                <table className="w-full text-left border-collapse">
-                                    <thead className="bg-[#1E1E1E] sticky top-0">
-                                        <tr className="text-gray-500 text-xs uppercase tracking-wider">
-                                            <th className="p-3 font-medium">Data</th>
-                                            <th className="p-3 font-medium">Descrição</th>
-                                            <th className="p-3 font-medium text-right">Valor</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-800">
-                                        {history.map(t => (
-                                            <tr key={t.id} className="hover:bg-gray-800/50 transition-colors">
-                                                <td className="p-3 text-xs text-gray-400 font-mono">{formatDate(t.date)}</td>
-                                                <td className="p-3 text-sm text-white">{t.description}</td>
-                                                <td className="p-3 text-sm font-bold text-vybe-red text-right">
-                                                    - {formatCurrency(t.amount)}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                <div className="divide-y divide-gray-800">
+                                    {groupedHistory.map((group) => {
+                                        const isExpanded = expandedMonths.has(group.monthKey);
+                                        return (
+                                            <div key={group.monthKey}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleMonth(group.monthKey)}
+                                                    className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-[#1E1E1E] hover:bg-[#252525] transition-colors sticky top-0"
+                                                    aria-expanded={isExpanded}
+                                                >
+                                                    <span className="flex items-center gap-2 text-sm font-bold text-white">
+                                                        <ChevronDown
+                                                            size={16}
+                                                            className={`text-gray-500 transition-transform ${isExpanded ? '' : '-rotate-90'}`}
+                                                        />
+                                                        {formatMonthLabel(group.monthKey)}
+                                                        <span className="text-[10px] font-medium text-gray-500 bg-[#121212] px-1.5 py-0.5 rounded-full border border-gray-700">
+                                                            {group.items.length} {group.items.length === 1 ? 'lançamento' : 'lançamentos'}
+                                                        </span>
+                                                    </span>
+                                                    <span className="text-sm font-bold text-vybe-red whitespace-nowrap">
+                                                        - {formatCurrency(group.total)}
+                                                    </span>
+                                                </button>
+
+                                                {isExpanded && (
+                                                    <table className="w-full text-left border-collapse">
+                                                        <tbody className="divide-y divide-gray-800/70">
+                                                            {group.items.map(t => (
+                                                                <tr key={t.id} className="hover:bg-gray-800/50 transition-colors">
+                                                                    <td className="p-3 pl-10 text-xs text-gray-400 font-mono whitespace-nowrap w-28">{formatDate(t.date)}</td>
+                                                                    <td className="p-3 text-sm text-white">{t.description}</td>
+                                                                    <td className="p-3 text-sm font-bold text-vybe-red text-right whitespace-nowrap">
+                                                                        - {formatCurrency(t.amount)}
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             )}
                         </div>
                         <div className="p-3 border-t border-gray-800 bg-[#1E1E1E] rounded-b-xl">
