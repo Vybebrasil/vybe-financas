@@ -183,6 +183,7 @@ const AppShell: React.FC = () => {
       />
 
       <EmployeeDetailsModal
+        onToggleStatus={handleToggleTransactionStatus}
         isOpen={isEmployeeModalOpen}
         onClose={() => setIsEmployeeModalOpen(false)}
         employee={selectedEmployee}

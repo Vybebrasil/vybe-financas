@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Employee, Transaction, TransactionType, Category } from '../types';
+import { Employee, Transaction, TransactionType, TransactionStatus, Category } from '../types';
 import { formatCurrency, formatDate } from '../utils';
 import { computeEmployeeAmountToPay, isPayrollDeduction } from '../src/services/employeePayroll';
 import { getCurrentMonthKey } from '../src/services/recurringLogic';
 import { getTransactionFilterDate } from '../src/services/transactionDates';
-import { X, User, Save, Edit2, FileText, DollarSign, Calendar, CreditCard, TrendingDown, ChevronDown } from 'lucide-react';
+import SettlementDateModal from './SettlementDateModal';
+import { X, User, Save, Edit2, FileText, DollarSign, Calendar, CreditCard, TrendingDown, ChevronDown, Clock, CheckCircle } from 'lucide-react';
 
 interface EmployeeDetailsModalProps {
   isOpen: boolean;
@@ -12,6 +13,8 @@ interface EmployeeDetailsModalProps {
   employee: Employee | null;
   transactions: Transaction[];
   onUpdateEmployee: (updatedEmployee: Employee) => void;
+  /** Dar baixa (total/parcial) ou voltar para pendente, como no extrato. */
+  onToggleStatus?: (id: string, paidDate?: string, partialAmount?: number) => void;
 }
 
 const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({ 
@@ -19,7 +22,8 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
   onClose, 
   employee, 
   transactions,
-  onUpdateEmployee 
+  onUpdateEmployee,
+  onToggleStatus,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   
@@ -40,21 +44,36 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
     return transactions.filter((t) => isPayrollDeduction(t, employee.id, monthKey));
   }, [employee, transactions, monthKey]);
 
+  // Salários e vales do colaborador (pagos e pendentes)
   const history = useMemo(() => {
     if (!employee) return [];
     return transactions
       .filter(
         (t) =>
           t.type === TransactionType.EXPENSE &&
-          t.employeeId === employee.id &&
-          t.category === Category.SALARY,
+          t.employeeId === employee.id,
       )
       .sort((a, b) => getTransactionFilterDate(b).localeCompare(getTransactionFilterDate(a)));
   }, [employee, transactions]);
 
   const totalPaid = useMemo(() => {
-    return history.reduce((acc, curr) => acc + curr.amount, 0);
+    return history
+      .filter((t) => t.status === TransactionStatus.PAID)
+      .reduce((acc, curr) => acc + curr.amount, 0);
   }, [history]);
+
+  // Total de vales pendentes (qualquer mês)
+  const pendingValesTotal = useMemo(() => {
+    return history
+      .filter(
+        (t) =>
+          t.status === TransactionStatus.PENDING &&
+          t.category !== Category.SALARY,
+      )
+      .reduce((acc, curr) => acc + curr.amount, 0);
+  }, [history]);
+
+  const [settlingTransaction, setSettlingTransaction] = useState<Transaction | null>(null);
 
   // Histórico agrupado por mês (sanfona), do mais recente ao mais antigo
   const groupedHistory = useMemo(() => {
@@ -110,8 +129,28 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
     setIsEditing(false);
   };
 
+  const handleStatusClick = (transaction: Transaction) => {
+    if (!onToggleStatus) return;
+    if (transaction.status === TransactionStatus.PENDING) {
+      setSettlingTransaction(transaction);
+      return;
+    }
+    onToggleStatus(transaction.id);
+  };
+
+  const handleConfirmSettlement = (paidDate: string, partialAmount?: number) => {
+    if (!settlingTransaction || !onToggleStatus) return;
+    onToggleStatus(settlingTransaction.id, paidDate, partialAmount);
+    setSettlingTransaction(null);
+  };
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <SettlementDateModal
+        transaction={settlingTransaction}
+        onClose={() => setSettlingTransaction(null)}
+        onConfirm={handleConfirmSettlement}
+      />
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity" 
@@ -324,13 +363,23 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                 {/* Right Column: Financial History */}
                 <div className="lg:col-span-2">
                     <div className="bg-[#121212] rounded-xl border border-gray-800 h-full flex flex-col">
-                        <div className="p-5 border-b border-gray-800 flex justify-between items-center">
+                        <div className="p-5 border-b border-gray-800 flex flex-wrap justify-between items-center gap-2">
                             <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                                <TrendingDown size={16} className="text-vybe-red" /> Pagamentos de salário
+                                <TrendingDown size={16} className="text-vybe-red" /> Pagamentos e vales
                             </h4>
-                            <div className="text-xs">
-                                <span className="text-gray-500">Total Pago: </span>
-                                <span className="text-white font-bold">{formatCurrency(totalPaid)}</span>
+                            <div className="flex flex-wrap items-center gap-3 text-xs">
+                                {pendingValesTotal > 0 && (
+                                    <span
+                                        className="flex items-center gap-1 text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 px-2 py-1 rounded-full font-bold"
+                                        title="Soma dos vales pendentes (clique no status do lançamento para dar baixa)"
+                                    >
+                                        <Clock size={12} /> Vales pendentes: {formatCurrency(pendingValesTotal)}
+                                    </span>
+                                )}
+                                <span>
+                                    <span className="text-gray-500">Total Pago: </span>
+                                    <span className="text-white font-bold">{formatCurrency(totalPaid)}</span>
+                                </span>
                             </div>
                         </div>
 
@@ -370,15 +419,44 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                                                 {isExpanded && (
                                                     <table className="w-full text-left border-collapse">
                                                         <tbody className="divide-y divide-gray-800/70">
-                                                            {group.items.map(t => (
+                                                            {group.items.map(t => {
+                                                                const isPaid = t.status === TransactionStatus.PAID;
+                                                                return (
                                                                 <tr key={t.id} className="hover:bg-gray-800/50 transition-colors">
                                                                     <td className="p-3 pl-10 text-xs text-gray-400 font-mono whitespace-nowrap w-28">{formatDate(t.date)}</td>
                                                                     <td className="p-3 text-sm text-white">{t.description}</td>
-                                                                    <td className="p-3 text-sm font-bold text-vybe-red text-right whitespace-nowrap">
+                                                                    <td className="p-3 text-center whitespace-nowrap w-28">
+                                                                        {onToggleStatus ? (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => handleStatusClick(t)}
+                                                                                className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border transition-all ${
+                                                                                    isPaid
+                                                                                        ? 'bg-vybe-green/10 text-vybe-green border-vybe-green/20 hover:bg-vybe-green hover:text-white'
+                                                                                        : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20 hover:bg-yellow-500 hover:text-white'
+                                                                                }`}
+                                                                                title={isPaid ? 'Pago — clique para voltar a pendente' : 'Pendente — clique para dar baixa (total ou parcial)'}
+                                                                            >
+                                                                                {isPaid ? <CheckCircle size={10} /> : <Clock size={10} />}
+                                                                                {isPaid ? 'Pago' : 'Pendente'}
+                                                                            </button>
+                                                                        ) : (
+                                                                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                                                                                isPaid
+                                                                                    ? 'bg-vybe-green/10 text-vybe-green border-vybe-green/20'
+                                                                                    : 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                                                                            }`}>
+                                                                                {isPaid ? <CheckCircle size={10} /> : <Clock size={10} />}
+                                                                                {isPaid ? 'Pago' : 'Pendente'}
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
+                                                                    <td className={`p-3 text-sm font-bold text-right whitespace-nowrap ${isPaid ? 'text-vybe-red' : 'text-yellow-500'}`}>
                                                                         - {formatCurrency(t.amount)}
                                                                     </td>
                                                                 </tr>
-                                                            ))}
+                                                                );
+                                                            })}
                                                         </tbody>
                                                     </table>
                                                 )}
@@ -390,7 +468,7 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
                         </div>
                         <div className="p-3 border-t border-gray-800 bg-[#1E1E1E] rounded-b-xl">
                             <p className="text-[10px] text-gray-500 text-center">
-                                Vales do mês aparecem no painel à esquerda. Aqui: salários pagos.
+                                Salários e vales do colaborador. Clique no status para dar baixa total ou parcial.
                             </p>
                         </div>
                     </div>
