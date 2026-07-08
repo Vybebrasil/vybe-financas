@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
-import { Client, Transaction, TransactionType } from '../types';
+import { Client, Transaction, TransactionType, TransactionStatus } from '../types';
 import { formatCurrency, formatDate } from '../utils';
-import { X, History, TrendingUp, TrendingDown, FileText, Gem } from 'lucide-react';
+import { X, History, TrendingUp, TrendingDown, FileText, Gem, Clock, CheckCircle } from 'lucide-react';
 
 interface ClientHistoryModalProps {
   isOpen: boolean;
@@ -23,19 +23,30 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
   const stats = useMemo(() => {
     const totals = clientTransactions.reduce(
       (acc, curr) => {
+        const isPaid = curr.status === TransactionStatus.PAID;
         if (curr.type === TransactionType.INCOME) {
-          acc.totalIncome += curr.amount;
-          acc.balance += curr.amount;
-          acc.incomeMonths.add(curr.date.slice(0, 7));
+          if (isPaid) {
+            acc.totalIncome += curr.amount;
+            acc.balance += curr.amount;
+            acc.incomeMonths.add(curr.date.slice(0, 7));
+          } else {
+            acc.pendingIncome += curr.amount;
+          }
         } else {
-          acc.totalExpense += curr.amount;
-          acc.balance -= curr.amount;
+          if (isPaid) {
+            acc.totalExpense += curr.amount;
+            acc.balance -= curr.amount;
+          } else {
+            acc.pendingExpense += curr.amount;
+          }
         }
         return acc;
       },
       {
         totalIncome: 0,
+        pendingIncome: 0,
         totalExpense: 0,
+        pendingExpense: 0,
         balance: 0,
         incomeMonths: new Set<string>(),
       }
@@ -47,7 +58,9 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
 
     return {
       totalIncome: totals.totalIncome,
+      pendingIncome: totals.pendingIncome,
       totalExpense: totals.totalExpense,
+      pendingExpense: totals.pendingExpense,
       balance: totals.balance,
       ltv,
       monthsActive,
@@ -90,6 +103,11 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
              <div className="bg-[#121212] p-4 rounded-xl border border-gray-800">
                 <span className="text-xs text-gray-500 block mb-1">Total Recebido</span>
                 <span className="text-lg font-bold text-vybe-green">{formatCurrency(stats.totalIncome)}</span>
+                {stats.pendingIncome > 0 && (
+                  <span className="text-[10px] text-yellow-500 flex items-center gap-1 mt-1">
+                    <Clock size={10} /> {formatCurrency(stats.pendingIncome)} pendente
+                  </span>
+                )}
              </div>
              <div className="bg-[#121212] p-4 rounded-xl border border-gray-800">
                 <span className="text-xs text-gray-500 block mb-1 flex items-center gap-1">
@@ -97,12 +115,19 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
                 </span>
                 <span className="text-lg font-bold text-vybe-accent">{formatCurrency(stats.ltv)}</span>
                 <span className="text-[10px] text-gray-500 block mt-1">
-                  {stats.monthsActive} {stats.monthsActive === 1 ? 'mês' : 'meses'} · média {formatCurrency(stats.avgMonthlyLtv)}/mês
+                  {stats.monthsActive === 0
+                    ? 'Nenhum pagamento confirmado'
+                    : `${stats.monthsActive} ${stats.monthsActive === 1 ? 'mês' : 'meses'} · média ${formatCurrency(stats.avgMonthlyLtv)}/mês`}
                 </span>
              </div>
              <div className="bg-[#121212] p-4 rounded-xl border border-gray-800">
                 <span className="text-xs text-gray-500 block mb-1">Custos Vinculados</span>
                 <span className="text-lg font-bold text-vybe-red">{formatCurrency(stats.totalExpense)}</span>
+                {stats.pendingExpense > 0 && (
+                  <span className="text-[10px] text-yellow-500 flex items-center gap-1 mt-1">
+                    <Clock size={10} /> {formatCurrency(stats.pendingExpense)} pendente
+                  </span>
+                )}
              </div>
              <div className="bg-[#121212] p-4 rounded-xl border border-gray-800">
                 <span className="text-xs text-gray-500 block mb-1">Saldo do Cliente</span>
@@ -130,32 +155,47 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
                          <th className="p-3 font-medium">Data</th>
                          <th className="p-3 font-medium">Descrição</th>
                          <th className="p-3 font-medium">Categoria</th>
+                         <th className="p-3 font-medium text-center">Status</th>
                          <th className="p-3 font-medium text-right">Valor</th>
                       </tr>
                    </thead>
                    <tbody className="divide-y divide-gray-800">
-                      {clientTransactions.map(t => (
-                         <tr key={t.id} className="hover:bg-gray-800/50 transition-colors">
+                      {clientTransactions.map(t => {
+                         const isPaid = t.status === TransactionStatus.PAID;
+                         return (
+                         <tr key={t.id} className={`hover:bg-gray-800/50 transition-colors ${!isPaid ? 'opacity-90' : ''}`}>
                             <td className="p-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(t.date)}</td>
                             <td className="p-3 text-sm text-white">{t.description}</td>
                             <td className="p-3 text-xs text-gray-400 whitespace-nowrap">
                                <span className="bg-[#1E1E1E] px-2 py-1 rounded border border-gray-700">{t.category}</span>
                             </td>
+                            <td className="p-3 text-center whitespace-nowrap">
+                               {isPaid ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-vybe-green/10 text-vybe-green border border-vybe-green/20">
+                                     <CheckCircle size={10} /> Pago
+                                  </span>
+                               ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
+                                     <Clock size={10} /> Pendente
+                                  </span>
+                               )}
+                            </td>
                             <td className="p-3 text-sm font-medium text-right whitespace-nowrap">
                                <div className="flex items-center justify-end gap-1">
                                   {t.type === TransactionType.INCOME ? (
-                                     <TrendingUp size={12} className="text-vybe-green" />
+                                     <TrendingUp size={12} className={isPaid ? 'text-vybe-green' : 'text-yellow-500'} />
                                   ) : (
-                                     <TrendingDown size={12} className="text-vybe-red" />
+                                     <TrendingDown size={12} className={isPaid ? 'text-vybe-red' : 'text-yellow-500'} />
                                   )}
-                                  <span className={t.type === TransactionType.INCOME ? 'text-vybe-green' : 'text-vybe-red'}>
+                                  <span className={isPaid ? (t.type === TransactionType.INCOME ? 'text-vybe-green' : 'text-vybe-red') : 'text-yellow-500'}>
                                      {t.type === TransactionType.EXPENSE && '- '}
                                      {formatCurrency(t.amount)}
                                   </span>
                                </div>
                             </td>
                          </tr>
-                      ))}
+                         );
+                      })}
                    </tbody>
                 </table>
              </div>
@@ -165,7 +205,7 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({ isOpen, onClose
         {/* Footer */}
         <div className="p-4 bg-[#1E1E1E] border-t border-gray-800 text-center">
              <p className="text-[10px] text-gray-500">
-                * Transações vinculadas por cliente ou pelo nome "{client.name}" na descrição. LTV = receitas acumuladas do cliente.
+                * Transações vinculadas por cliente ou pelo nome "{client.name}" na descrição. Totais e LTV consideram apenas lançamentos pagos.
              </p>
         </div>
       </div>
