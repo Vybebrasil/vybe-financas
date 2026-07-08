@@ -36,7 +36,11 @@ const TransactionList: React.FC<TransactionListProps> = ({
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterBankAccount, setFilterBankAccount] = useState<string>('all');
   const [filterType, setFilterType] = useState<'all' | TransactionType>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | TransactionStatus>('all');
   const [settlingTransaction, setSettlingTransaction] = useState<Transaction | null>(null);
+
+  const filterSelectClass =
+    'vybe-filter-select min-w-0 max-w-[8.5rem] sm:max-w-none p-2 pr-6 outline-none cursor-pointer border-r border-gray-600/80 last:border-0 focus:ring-1 focus:ring-vybe-accent/50 rounded-sm';
 
   const handleStatusClick = (transaction: Transaction) => {
     if (transaction.status === TransactionStatus.PENDING) {
@@ -99,10 +103,11 @@ const TransactionList: React.FC<TransactionListProps> = ({
           : t.bankAccountId === filterBankAccount ||
             t.transferToAccountId === filterBankAccount);
       const matchType = filterType === 'all' || t.type === filterType;
+      const matchStatus = filterStatus === 'all' || t.status === filterStatus;
 
-      return matchYear && matchMonth && matchCategory && matchBank && matchType;
+      return matchYear && matchMonth && matchCategory && matchBank && matchType && matchStatus;
     });
-  }, [transactions, filterYear, filterMonth, filterCategory, filterBankAccount, filterType]);
+  }, [transactions, filterYear, filterMonth, filterCategory, filterBankAccount, filterType, filterStatus]);
 
   const clearFilters = () => {
     setFilterMonth('all');
@@ -110,6 +115,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
     setFilterCategory('all');
     setFilterBankAccount('all');
     setFilterType('all');
+    setFilterStatus('all');
   };
 
   const hasActiveFilters =
@@ -117,7 +123,8 @@ const TransactionList: React.FC<TransactionListProps> = ({
     filterYear !== 'all' ||
     filterCategory !== 'all' ||
     filterBankAccount !== 'all' ||
-    filterType !== 'all';
+    filterType !== 'all' ||
+    filterStatus !== 'all';
 
   const accountName = (id?: string) =>
     bankAccounts.find((a) => a.id === id)?.name ?? '—';
@@ -177,7 +184,8 @@ const TransactionList: React.FC<TransactionListProps> = ({
               <select
                 value={filterMonth}
                 onChange={(e) => setFilterMonth(e.target.value)}
-                className="bg-transparent text-xs text-white p-2 outline-none cursor-pointer border-r border-gray-700 last:border-0"
+                className={filterSelectClass}
+                aria-label="Filtrar por mês"
               >
                 <option value="all">Todos os Meses</option>
                 {months.map(m => (
@@ -189,7 +197,8 @@ const TransactionList: React.FC<TransactionListProps> = ({
               <select
                 value={filterYear}
                 onChange={(e) => setFilterYear(e.target.value)}
-                className="bg-transparent text-xs text-white p-2 outline-none cursor-pointer border-r border-gray-700 last:border-0"
+                className={filterSelectClass}
+                aria-label="Filtrar por ano"
               >
                 <option value="all">Todos os Anos</option>
                 {availableYears.map(year => (
@@ -203,7 +212,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                 onChange={(e) =>
                   setFilterType(e.target.value as 'all' | TransactionType)
                 }
-                className="bg-transparent text-xs text-white p-2 outline-none cursor-pointer border-r border-gray-700"
+                className={filterSelectClass}
                 aria-label="Filtrar por entrada ou saída"
               >
                 <option value="all">Entradas e saídas</option>
@@ -216,7 +225,8 @@ const TransactionList: React.FC<TransactionListProps> = ({
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
-                className="bg-transparent text-xs text-white p-2 outline-none cursor-pointer border-r border-gray-700"
+                className={filterSelectClass}
+                aria-label="Filtrar por categoria"
               >
                 <option value="all">Todas as Categorias</option>
                 {categoriesForFilter.map((cat) => (
@@ -224,11 +234,25 @@ const TransactionList: React.FC<TransactionListProps> = ({
                 ))}
               </select>
 
+              <select
+                value={filterStatus}
+                onChange={(e) =>
+                  setFilterStatus(e.target.value as 'all' | TransactionStatus)
+                }
+                className={filterSelectClass}
+                aria-label="Filtrar por status"
+              >
+                <option value="all">Todos os status</option>
+                <option value={TransactionStatus.PENDING}>Pendentes</option>
+                <option value={TransactionStatus.PAID}>Pagos</option>
+              </select>
+
               {bankAccounts.length > 0 && (
                 <select
                   value={filterBankAccount}
                   onChange={(e) => setFilterBankAccount(e.target.value)}
-                  className="bg-transparent text-xs text-white p-2 outline-none cursor-pointer"
+                  className={filterSelectClass}
+                  aria-label="Filtrar por conta bancária"
                 >
                   <option value="all">Todas as contas</option>
                   <option value="none">Sem conta</option>

@@ -158,3 +158,27 @@ body {
   margin-top: 1rem;
   text-align: center;
 }
+
+/* Filtros do extrato — contraste em fundo escuro */
+.vybe-filter-select {
+  background-color: #1a1a1a;
+  color: #f3f4f6;
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.vybe-filter-select:hover,
+.vybe-filter-select:focus {
+  color: #ffffff;
+}
+
+.vybe-filter-select option {
+  background-color: #1a1a1a;
+  color: #f3f4f6;
+  font-weight: 500;
+}
+
+.vybe-filter-select option:checked {
+  background-color: #2a2a2a;
+  color: #ffffff;
+}
