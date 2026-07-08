@@ -19,6 +19,10 @@ interface EmployeeValeModalProps {
     date: string;
     status: TransactionStatus;
   }) => Promise<void>;
+  /** Título do modal (padrão: Registrar vale) */
+  heading?: string;
+  /** Rótulo do botão quando o vale é pago na hora */
+  submitPaidLabel?: string;
 }
 
 const EmployeeValeModal: React.FC<EmployeeValeModalProps> = ({
@@ -27,6 +31,8 @@ const EmployeeValeModal: React.FC<EmployeeValeModalProps> = ({
   amountToPay,
   onClose,
   onSubmit,
+  heading = 'Registrar vale',
+  submitPaidLabel = 'Registrar e descontar da folha',
 }) => {
   const [preset, setPreset] = useState<string>(EMPLOYEE_VALE_PRESETS[0]);
   const [customLabel, setCustomLabel] = useState('');
@@ -83,7 +89,7 @@ const EmployeeValeModal: React.FC<EmployeeValeModalProps> = ({
           <div>
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <Ticket className="text-vybe-accent" size={20} />
-              Registrar vale
+              {heading}
             </h3>
             <p className="text-xs text-gray-500 mt-1">
               {employee.name} · A pagar: {formatCurrency(amountToPay)}
@@ -177,7 +183,7 @@ const EmployeeValeModal: React.FC<EmployeeValeModalProps> = ({
             className="w-full py-2.5 bg-vybe-accent hover:bg-orange-600 text-white rounded-lg font-medium disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {busy ? <Loader2 size={18} className="animate-spin" /> : null}
-            {asPending ? 'Registrar pendente' : 'Registrar e descontar da folha'}
+            {asPending ? 'Registrar pendente' : submitPaidLabel}
           </button>
         </form>
       </div>

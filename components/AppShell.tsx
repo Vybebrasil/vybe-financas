@@ -191,6 +191,7 @@ const AppShell: React.FC = () => {
         transactions={transactions}
         compensationHistory={employeeCompensationHistory}
         onUpdateEmployee={handleUpdateEmployee}
+        onAddTransaction={handleAddTransaction}
       />
 
       <ReceiptModal

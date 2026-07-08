@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Employee, EmployeeCompensationHistory, Transaction, TransactionType, TransactionStatus, Category } from '../types';
-import { formatCurrency, formatDate } from '../utils';
+import { formatCurrency, formatDate, generateId } from '../utils';
 import {
   computeEmployeeAmountToPay,
   getEmployeeTotalOverpaymentVales,
@@ -9,7 +9,9 @@ import {
 import { getCurrentMonthKey } from '../src/services/recurringLogic';
 import { getTransactionFilterDate } from '../src/services/transactionDates';
 import SettlementDateModal from './SettlementDateModal';
-import { X, User, Save, Edit2, FileText, DollarSign, Calendar, CreditCard, TrendingDown, ChevronDown, Clock, CheckCircle, History } from 'lucide-react';
+import EmployeeValeModal from './EmployeeValeModal';
+import { useToast } from './ToastProvider';
+import { X, User, Save, Edit2, FileText, DollarSign, Calendar, CreditCard, TrendingDown, ChevronDown, Clock, CheckCircle, History, Ticket } from 'lucide-react';
 
 interface EmployeeDetailsModalProps {
   isOpen: boolean;
@@ -21,6 +23,7 @@ interface EmployeeDetailsModalProps {
     updatedEmployee: Employee,
     options?: { compensationEffectiveMonth?: string },
   ) => void;
+  onAddTransaction?: (transaction: Transaction) => Promise<void>;
   /** Dar baixa (total/parcial) ou voltar para pendente, como no extrato. */
   onToggleStatus?: (id: string, paidDate?: string, partialAmount?: number) => void;
 }
@@ -32,9 +35,12 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
   transactions,
   compensationHistory = [],
   onUpdateEmployee,
+  onAddTransaction,
   onToggleStatus,
 }) => {
+  const toast = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [isValeModalOpen, setIsValeModalOpen] = useState(false);
   
   // Form States
   const [formData, setFormData] = useState<Employee | null>(null);
@@ -140,6 +146,10 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
     return label.charAt(0).toUpperCase() + label.slice(1);
   };
 
+  useEffect(() => {
+    if (!isOpen) setIsValeModalOpen(false);
+  }, [isOpen]);
+
   const payroll = useMemo(() => {
     if (!employee) return null;
     return computeEmployeeAmountToPay(employee, transactions);
@@ -174,12 +184,47 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
     setSettlingTransaction(null);
   };
 
+  const handleRegisterVale = async (payload: {
+    description: string;
+    amount: number;
+    date: string;
+    status: TransactionStatus;
+  }) => {
+    if (!employee || !onAddTransaction) return;
+    await onAddTransaction({
+      id: generateId(),
+      description: payload.description,
+      amount: payload.amount,
+      category: Category.EMPLOYEE_VOUCHER,
+      type: TransactionType.EXPENSE,
+      date: payload.date,
+      paidDate: payload.status === TransactionStatus.PAID ? payload.date : undefined,
+      status: payload.status,
+      paymentMethod: 'PIX',
+      employeeId: employee.id,
+    });
+    toast.success(
+      payload.status === TransactionStatus.PENDING
+        ? 'Vale pendente registrado.'
+        : 'Vale baixado e descontado da folha do mês.',
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <SettlementDateModal
         transaction={settlingTransaction}
         onClose={() => setSettlingTransaction(null)}
         onConfirm={handleConfirmSettlement}
+      />
+      <EmployeeValeModal
+        isOpen={isValeModalOpen}
+        employee={employee}
+        amountToPay={payroll?.amountToPay ?? 0}
+        heading="Baixar vale"
+        submitPaidLabel="Baixar vale"
+        onClose={() => setIsValeModalOpen(false)}
+        onSubmit={handleRegisterVale}
       />
       {/* Backdrop */}
       <div 
@@ -202,6 +247,15 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
              </div>
           </div>
           <div className="flex items-center gap-2">
+            {!isEditing && onAddTransaction && (
+              <button
+                type="button"
+                onClick={() => setIsValeModalOpen(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-orange-900/30 hover:bg-orange-900/50 text-orange-300 rounded-lg text-xs font-medium transition-colors border border-orange-800/50"
+              >
+                <Ticket size={14} /> Baixar vale
+              </button>
+            )}
             {!isEditing ? (
                 <button 
                     onClick={() => setIsEditing(true)}
@@ -343,6 +397,18 @@ const EmployeeDetailsModal: React.FC<EmployeeDetailsModalProps> = ({
 
                             {payroll && (
                               <div className="bg-[#1E1E1E] rounded-lg border border-amber-900/30 p-3 space-y-1">
+                                <div className="flex justify-between items-center gap-2">
+                                  <span className="text-xs text-gray-500">Folha do mês</span>
+                                  {onAddTransaction && !isEditing && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setIsValeModalOpen(true)}
+                                      className="text-[10px] text-orange-400 hover:text-orange-300 underline"
+                                    >
+                                      Baixar vale
+                                    </button>
+                                  )}
+                                </div>
                                 <div className="flex justify-between text-xs">
                                   <span className="text-gray-500">Vales do mês (pagos)</span>
                                   <span className="text-orange-400/90">− {formatCurrency(payroll.linkedExpenses)}</span>
