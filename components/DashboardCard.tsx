@@ -12,6 +12,7 @@ interface DashboardCardProps {
   subtitle?: string;
   deltaPercent?: number | null;
   formatAsPercent?: boolean;
+  size?: 'lg' | 'sm';
 }
 
 const DashboardCard: React.FC<DashboardCardProps> = ({
@@ -24,6 +25,7 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
   subtitle,
   deltaPercent,
   formatAsPercent = false,
+  size = 'lg',
 }) => {
   let valueColorClass = 'text-white';
 
@@ -41,12 +43,28 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
       ? null
       : `${deltaPercent > 0 ? '+' : ''}${deltaPercent.toFixed(0)}% vs período ant.`;
 
+  const isLarge = size === 'lg';
+
   return (
-    <div className="bg-vybe-card p-6 rounded-xl shadow-lg border border-gray-800 flex flex-col justify-between hover:border-vybe-accent transition-colors duration-300">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-vybe-muted text-sm font-medium uppercase tracking-wider">{title}</h3>
+    <div
+      className={`bg-vybe-card rounded-xl shadow-lg border flex flex-col justify-between hover:border-vybe-accent transition-colors duration-300 ${
+        isLarge
+          ? 'p-6 lg:p-7 border-gray-800'
+          : 'p-4 border-gray-800/80 hover:border-gray-700'
+      }`}
+    >
+      <div className={`flex items-center justify-between ${isLarge ? 'mb-4' : 'mb-3'}`}>
+        <h3
+          className={`text-vybe-muted font-medium uppercase tracking-wider ${
+            isLarge ? 'text-sm' : 'text-[11px]'
+          }`}
+        >
+          {title}
+        </h3>
         <div
-          className={`p-2 rounded-full ${
+          className={`rounded-full ${
+            isLarge ? 'p-2' : 'p-1.5'
+          } ${
             type === 'income'
               ? 'bg-vybe-green/10 text-vybe-green'
               : type === 'expense'
@@ -58,22 +76,32 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
         </div>
       </div>
       <div>
-        {subtitle && <p className="text-[10px] text-gray-500 mb-1">{subtitle}</p>}
-        <p className={`text-2xl lg:text-3xl font-bold ${valueColorClass}`}>
+        {subtitle && (
+          <p className={`text-gray-500 mb-1 ${isLarge ? 'text-[10px]' : 'text-[9px]'}`}>{subtitle}</p>
+        )}
+        <p
+          className={`font-bold ${valueColorClass} ${
+            isLarge ? 'text-3xl lg:text-4xl' : 'text-xl lg:text-2xl'
+          }`}
+        >
           {formatAsPercent ? `${value.toFixed(1)}%` : formatCurrency(value)}
         </p>
         {deltaLabel && (
           <p
-            className={`text-xs mt-1 font-medium ${
-              (deltaPercent ?? 0) >= 0 ? 'text-vybe-green' : 'text-red-400'
-            }`}
+            className={`mt-1 font-medium ${
+              isLarge ? 'text-xs' : 'text-[10px]'
+            } ${(deltaPercent ?? 0) >= 0 ? 'text-vybe-green' : 'text-red-400'}`}
           >
             {deltaLabel}
           </p>
         )}
         {showPending && (
-          <p className="mt-2 text-xs text-amber-400/90 flex items-center gap-1.5 font-medium">
-            <Clock size={12} className="shrink-0" />
+          <p
+            className={`mt-2 text-amber-400/90 flex items-center gap-1.5 font-medium ${
+              isLarge ? 'text-xs' : 'text-[10px]'
+            }`}
+          >
+            <Clock size={isLarge ? 12 : 10} className="shrink-0" />
             {pendingHint ?? (
               <>
                 Pendente: <span className="text-amber-300">{formatCurrency(pendingValue)}</span>

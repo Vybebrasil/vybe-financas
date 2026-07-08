@@ -14,7 +14,6 @@ import {
   ChevronRight,
   Calendar,
   PieChart,
-  BarChart3,
   ArrowDownLeft,
   ArrowUpRight,
   Lock,
@@ -30,7 +29,6 @@ import {
   DashboardPeriodPreset,
   computePeriodComparison,
   computeClientPortfolio,
-  computeFixedCosts,
   computeMrrVsReceived,
   computeExpensesByCategory,
   getClientsDueSoon,
@@ -91,10 +89,6 @@ const DashboardView: React.FC = () => {
   );
 
   const portfolio = useMemo(() => computeClientPortfolio(clients), [clients]);
-  const fixedCosts = useMemo(
-    () => computeFixedCosts(employees, subscriptions),
-    [employees, subscriptions],
-  );
 
   const mrrVsReceived = useMemo(
     () => computeMrrVsReceived(clients, transactions, range),
@@ -151,6 +145,25 @@ const DashboardView: React.FC = () => {
             Cockpit financeiro
           </h2>
           <p className="text-sm text-gray-500 mt-1 capitalize">{range.label}</p>
+          <div className="mt-3 inline-flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 bg-[#121212] border border-gray-800 rounded-lg px-4 py-2.5">
+            <div className="flex items-center gap-2">
+              <Wallet size={16} className="text-vybe-accent shrink-0" />
+              <span className="text-xs text-gray-400 uppercase tracking-wide">Saldo período</span>
+              <span
+                className={`text-lg font-bold ${
+                  kpis.balance >= 0 ? 'text-white' : 'text-vybe-red'
+                }`}
+              >
+                {formatCurrency(kpis.balance)}
+              </span>
+            </div>
+            {(kpis.pendingIncome > 0 || kpis.pendingExpense > 0) && (
+              <p className="text-[11px] text-amber-400/90 flex items-center gap-1.5 font-medium sm:border-l sm:border-gray-800 sm:pl-4">
+                <Clock size={11} className="shrink-0" />
+                Projetado: {formatCurrency(kpis.projectedBalance)}
+              </p>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex bg-[#1E1E1E] p-1 rounded-lg border border-gray-800">
@@ -186,32 +199,53 @@ const DashboardView: React.FC = () => {
         </div>
       </div>
 
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5">
         <DashboardCard
           title="Entradas"
           subtitle="Pagas no período"
           value={kpis.totalIncome}
           type="income"
-          icon={<TrendingUp size={20} />}
+          icon={<TrendingUp size={22} />}
           pendingValue={kpis.pendingIncome}
           deltaPercent={comparison.deltaIncomePct}
+          size="lg"
         />
         <DashboardCard
           title="Saídas"
           subtitle="Pagas no período"
           value={kpis.totalExpense}
           type="expense"
-          icon={<TrendingDown size={20} />}
+          icon={<TrendingDown size={22} />}
           pendingValue={kpis.pendingExpense}
           deltaPercent={comparison.deltaExpensePct}
+          size="lg"
         />
         <DashboardCard
           title="Lucro"
           subtitle="Entradas − saídas (pagas)"
           value={kpis.profit}
           type="balance"
-          icon={<Wallet size={20} />}
+          icon={<Wallet size={22} />}
           deltaPercent={comparison.deltaProfitPct}
+          size="lg"
+        />
+      </section>
+
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <DashboardCard
+          title="MRR"
+          subtitle={`${portfolio.activeCount} clientes ativos`}
+          value={portfolio.mrr}
+          type="neutral"
+          icon={<Users size={18} />}
+          size="sm"
+        />
+        <DashboardCard
+          title="Ticket médio"
+          value={portfolio.ticketMedio}
+          type="neutral"
+          icon={<DollarSign size={18} />}
+          size="sm"
         />
         <DashboardCard
           title="Margem"
@@ -219,41 +253,8 @@ const DashboardView: React.FC = () => {
           value={kpis.margin}
           type="neutral"
           formatAsPercent
-          icon={<Percent size={20} />}
-        />
-      </section>
-
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <DashboardCard
-          title="MRR"
-          subtitle={`${portfolio.activeCount} clientes ativos`}
-          value={portfolio.mrr}
-          type="neutral"
-          icon={<Users size={20} />}
-        />
-        <DashboardCard
-          title="Ticket médio"
-          value={portfolio.ticketMedio}
-          type="neutral"
-          icon={<DollarSign size={20} />}
-        />
-        <DashboardCard
-          title="Custos fixos"
-          subtitle={`Folha ${formatCurrency(fixedCosts.payroll)} + tools ${formatCurrency(fixedCosts.subscriptions)}`}
-          value={fixedCosts.total}
-          type="expense"
-          icon={<BarChart3 size={20} />}
-        />
-        <DashboardCard
-          title="Saldo período"
-          value={kpis.balance}
-          type="balance"
-          icon={<Wallet size={20} />}
-          pendingHint={
-            kpis.pendingIncome > 0 || kpis.pendingExpense > 0
-              ? `Projetado: ${formatCurrency(kpis.projectedBalance)}`
-              : undefined
-          }
+          icon={<Percent size={18} />}
+          size="sm"
         />
       </section>
 
