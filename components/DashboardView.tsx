@@ -227,6 +227,9 @@ const DashboardView: React.FC = () => {
           type="balance"
           icon={<Wallet size={22} />}
           deltaPercent={comparison.deltaProfitPct}
+          pendingLabel="Lucro esperado"
+          pendingValue={kpis.projectedBalance}
+          showPendingLine={kpis.pendingIncome > 0 || kpis.pendingExpense > 0}
           size="lg"
         />
       </section>

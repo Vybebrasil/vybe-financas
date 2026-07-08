@@ -9,6 +9,8 @@ interface DashboardCardProps {
   icon: React.ReactNode;
   pendingValue?: number;
   pendingHint?: string;
+  pendingLabel?: string;
+  showPendingLine?: boolean;
   subtitle?: string;
   deltaPercent?: number | null;
   formatAsPercent?: boolean;
@@ -22,6 +24,8 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
   icon,
   pendingValue = 0,
   pendingHint,
+  pendingLabel,
+  showPendingLine,
   subtitle,
   deltaPercent,
   formatAsPercent = false,
@@ -36,7 +40,8 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
   }
   if (type === 'neutral') valueColorClass = 'text-vybe-accent';
 
-  const showPending = pendingValue > 0 || !!pendingHint;
+  const showPending =
+    showPendingLine ?? (!!pendingHint || pendingValue > 0);
 
   const deltaLabel =
     deltaPercent === null || deltaPercent === undefined
@@ -104,7 +109,8 @@ const DashboardCard: React.FC<DashboardCardProps> = ({
             <Clock size={isLarge ? 12 : 10} className="shrink-0" />
             {pendingHint ?? (
               <>
-                Pendente: <span className="text-amber-300">{formatCurrency(pendingValue)}</span>
+                {pendingLabel ?? 'Pendente'}:{' '}
+                <span className="text-amber-300">{formatCurrency(pendingValue)}</span>
               </>
             )}
           </p>
