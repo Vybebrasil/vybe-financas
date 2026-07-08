@@ -22,29 +22,15 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({
 }) => {
   const [settlingTransaction, setSettlingTransaction] = useState<Transaction | null>(null);
 
-  if (!isOpen || !client) return null;
-
-  const handleStatusClick = (transaction: Transaction) => {
-    if (!onToggleStatus) return;
-    if (transaction.status === TransactionStatus.PENDING) {
-      setSettlingTransaction(transaction);
-      return;
-    }
-    onToggleStatus(transaction.id);
-  };
-
-  const handleConfirmSettlement = (paidDate: string, partialAmount?: number) => {
-    if (!settlingTransaction || !onToggleStatus) return;
-    onToggleStatus(settlingTransaction.id, paidDate, partialAmount);
-    setSettlingTransaction(null);
-  };
-
   const clientTransactions = useMemo(() => {
+    if (!client) return [] as Transaction[];
     const term = client.name.toLowerCase();
     return transactions.filter(
       (t) => t.clientId === client.id || t.description.toLowerCase().includes(term)
     );
   }, [client, transactions]);
+
+  const monthlyFee = client?.monthlyFee ?? 0;
 
   const stats = useMemo(() => {
     const totals = clientTransactions.reduce(
@@ -91,7 +77,7 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({
       paidByMonth.set(key, (paidByMonth.get(key) ?? 0) + t.amount);
     }
     const paidThisMonth = paidByMonth.get(currentMonthKey) ?? 0;
-    const monthPending = Math.max(client.monthlyFee - paidThisMonth, 0);
+    const monthPending = Math.max(monthlyFee - paidThisMonth, 0);
 
     // Pendente acumulado de meses anteriores: soma dos déficits mês a mês
     // desde o primeiro mês com movimentação do cliente até o mês passado.
@@ -99,13 +85,13 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({
       .filter((t) => t.type === TransactionType.INCOME)
       .map((t) => t.date.slice(0, 7));
     let pastDue = 0;
-    if (allMonthKeys.length > 0 && client.monthlyFee > 0) {
+    if (allMonthKeys.length > 0 && monthlyFee > 0) {
       const firstMonthKey = allMonthKeys.reduce((min, k) => (k < min ? k : min));
       let [y, m] = firstMonthKey.split('-').map(Number);
       const [cy, cm] = currentMonthKey.split('-').map(Number);
       while (y < cy || (y === cy && m < cm)) {
         const key = `${y}-${String(m).padStart(2, '0')}`;
-        pastDue += Math.max(client.monthlyFee - (paidByMonth.get(key) ?? 0), 0);
+        pastDue += Math.max(monthlyFee - (paidByMonth.get(key) ?? 0), 0);
         m += 1;
         if (m > 12) {
           m = 1;
@@ -129,7 +115,24 @@ const ClientHistoryModal: React.FC<ClientHistoryModalProps> = ({
       pastDue,
       totalPending,
     };
-  }, [clientTransactions, client.monthlyFee]);
+  }, [clientTransactions, monthlyFee]);
+
+  if (!isOpen || !client) return null;
+
+  const handleStatusClick = (transaction: Transaction) => {
+    if (!onToggleStatus) return;
+    if (transaction.status === TransactionStatus.PENDING) {
+      setSettlingTransaction(transaction);
+      return;
+    }
+    onToggleStatus(transaction.id);
+  };
+
+  const handleConfirmSettlement = (paidDate: string, partialAmount?: number) => {
+    if (!settlingTransaction || !onToggleStatus) return;
+    onToggleStatus(settlingTransaction.id, paidDate, partialAmount);
+    setSettlingTransaction(null);
+  };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
