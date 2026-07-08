@@ -8,6 +8,7 @@ import {
   getSubscriptionMonthPaymentBadge,
   getSubscriptionPastDueTotal,
   sortSubscriptionsByPaymentDay,
+  computeSubscriptionsMonthlySummary,
 } from '../src/services/subscriptionBilling';
 import { Users, Plus, Trash2, Laptop, ShoppingBag, DollarSign, Eye, Pencil, X, Save, History, Pin, Ticket, CheckCircle, Clock } from 'lucide-react';
 import SubscriptionHistoryModal from './SubscriptionHistoryModal';
@@ -295,7 +296,10 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
     toast.success('Pagamento registrado.');
   };
 
-  const totalSubs = subscriptions.reduce((acc, curr) => acc + curr.cost, 0);
+  const subscriptionsSummary = useMemo(
+    () => computeSubscriptionsMonthlySummary(subscriptions, transactions, monthKey),
+    [subscriptions, transactions, monthKey],
+  );
 
   const sortedSubscriptions = useMemo(
     () => sortSubscriptionsByPaymentDay(subscriptions),
@@ -313,6 +317,15 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
 
   const totalAmountToPay = useMemo(
     () => employeePayrollRows.reduce((sum, row) => sum + row.payroll.amountToPay, 0),
+    [employeePayrollRows],
+  );
+
+  const totalMonthlyPayroll = useMemo(
+    () =>
+      employeePayrollRows.reduce(
+        (sum, row) => sum + row.payroll.salary + row.payroll.bonus,
+        0,
+      ),
     [employeePayrollRows],
   );
 
@@ -475,6 +488,10 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
             <p className="text-xs text-gray-500 mt-1">Gestão de equipe e pagamentos</p>
           </div>
           <div className="flex items-center gap-3">
+            <div className="bg-[#121212] px-4 py-2 rounded-lg border border-gray-700">
+              <span className="text-xs text-gray-400 block">Custo Mensal</span>
+              <span className="text-lg font-bold text-white">{formatCurrency(totalMonthlyPayroll)}</span>
+            </div>
             <div
               className={`bg-[#121212] px-4 py-2 rounded-lg border ${
                 totalAmountToPay <= 0 ? 'border-green-900/40' : 'border-amber-900/40'
@@ -588,7 +605,23 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
           <div className="flex items-center gap-3">
             <div className="bg-[#121212] px-4 py-2 rounded-lg border border-gray-700">
               <span className="text-xs text-gray-400 block">Custo Mensal</span>
-              <span className="text-lg font-bold text-white">{formatCurrency(totalSubs)}</span>
+              <span className="text-lg font-bold text-white">
+                {formatCurrency(subscriptionsSummary.totalMonthlyCost)}
+              </span>
+            </div>
+            <div
+              className={`bg-[#121212] px-4 py-2 rounded-lg border ${
+                subscriptionsSummary.amountToPay <= 0 ? 'border-green-900/40' : 'border-amber-900/40'
+              }`}
+            >
+              <span className="text-xs text-gray-400 block">A pagar</span>
+              <span
+                className={`text-lg font-bold ${
+                  subscriptionsSummary.amountToPay <= 0 ? 'text-green-400' : 'text-amber-400'
+                }`}
+              >
+                {formatCurrency(subscriptionsSummary.amountToPay)}
+              </span>
             </div>
             <button
               type="button"

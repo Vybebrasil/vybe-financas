@@ -216,3 +216,28 @@ export function sortSubscriptionsByPaymentDay(subscriptions: Subscription[]): Su
     return a.name.localeCompare(b.name, 'pt-BR');
   });
 }
+
+export interface SubscriptionsMonthlySummary {
+  totalMonthlyCost: number;
+  paidThisMonth: number;
+  amountToPay: number;
+}
+
+/** Totais do mês para o cabeçalho de Gestão de Aplicativos. */
+export function computeSubscriptionsMonthlySummary(
+  subscriptions: Subscription[],
+  transactions: Transaction[],
+  monthKey = getCurrentMonthKey(),
+): SubscriptionsMonthlySummary {
+  const activeSubs = subscriptions.filter((s) => s.active);
+  const totalMonthlyCost = activeSubs.reduce((sum, s) => sum + s.cost, 0);
+  let paidThisMonth = 0;
+
+  for (const sub of activeSubs) {
+    paidThisMonth += getSubscriptionHistoryStats(sub, transactions, monthKey).paidThisMonth;
+  }
+
+  const amountToPay = Math.max(0, totalMonthlyCost - paidThisMonth);
+
+  return { totalMonthlyCost, paidThisMonth, amountToPay };
+}
