@@ -693,6 +693,39 @@ export const AppDataProvider: React.FC<AppDataProviderProps> = ({ children }) =>
       return;
     }
 
+    const isConfirmedFullSettlement =
+      transaction.status === TransactionStatus.PENDING &&
+      typeof partialAmount === 'number' &&
+      partialAmount > 0 &&
+      partialAmount >= transaction.amount;
+
+    if (isConfirmedFullSettlement) {
+      const settleDate = paidDate ?? new Date().toISOString().split('T')[0];
+      const confirmedAmount = Math.round(partialAmount * 100) / 100;
+      try {
+        const updated = await api.transactions.update(id, {
+          ...transaction,
+          amount: confirmedAmount,
+          status: TransactionStatus.PAID,
+          paidDate: settleDate,
+        });
+        setTransactions((prev) =>
+          prev.map((t) => (t.id === id ? updated : t)),
+        );
+        await recordAudit(
+          'transaction.status',
+          `${transaction.description}: pago R$ ${confirmedAmount.toFixed(2)} em ${settleDate}`,
+          'transaction',
+          id,
+        );
+        toast.success(`Pagamento de R$ ${confirmedAmount.toFixed(2)} confirmado.`);
+      } catch (error) {
+        console.error(error);
+        toast.error('Erro ao confirmar pagamento.');
+      }
+      return;
+    }
+
     const newStatus =
       transaction.status === TransactionStatus.PAID
         ? TransactionStatus.PENDING

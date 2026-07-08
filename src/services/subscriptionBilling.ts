@@ -130,6 +130,18 @@ export function getSubscriptionMonthPaymentBadge(snapshot: SubscriptionBillingSn
   return null;
 }
 
+export function getSubscriptionPendingForMonth(
+  subscription: Subscription,
+  transactions: Transaction[],
+  monthKey = getCurrentMonthKey(),
+): Transaction | undefined {
+  return getSubscriptionTransactions(subscription, transactions).find(
+    (t) =>
+      t.status === TransactionStatus.PENDING &&
+      getTransactionFilterDate(t).startsWith(monthKey),
+  );
+}
+
 export function getSubscriptionTransactions(
   subscription: Subscription,
   transactions: Transaction[],

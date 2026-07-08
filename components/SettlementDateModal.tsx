@@ -10,22 +10,27 @@ interface SettlementDateModalProps {
   onClose: () => void;
   /** partialAmount presente = baixa parcial; o restante continua pendente. */
   onConfirm: (paidDate: string, partialAmount?: number) => void;
+  /** Permite confirmar/ajustar o valor na baixa total (ex.: assinaturas com valor variável). */
+  editableAmount?: boolean;
 }
 
 const SettlementDateModal: React.FC<SettlementDateModalProps> = ({
   transaction,
   onClose,
   onConfirm,
+  editableAmount = false,
 }) => {
   const [paidDate, setPaidDate] = useState('');
   const [mode, setMode] = useState<'total' | 'partial'>('total');
   const [partialValue, setPartialValue] = useState('');
+  const [totalValue, setTotalValue] = useState('');
 
   useEffect(() => {
     if (!transaction) return;
     setPaidDate(new Date().toISOString().split('T')[0]);
     setMode('total');
     setPartialValue('');
+    setTotalValue(String(transaction.amount));
   }, [transaction]);
 
   if (!transaction) return null;
@@ -34,10 +39,15 @@ const SettlementDateModal: React.FC<SettlementDateModalProps> = ({
   const isIncome = transaction.type === TransactionType.INCOME;
 
   const parsedPartial = parseFloat(partialValue.replace(',', '.'));
+  const parsedTotal = parseFloat(totalValue.replace(',', '.'));
   const partialValid =
     !Number.isNaN(parsedPartial) &&
     parsedPartial > 0 &&
     parsedPartial < transaction.amount;
+  const totalValid =
+    editableAmount &&
+    !Number.isNaN(parsedTotal) &&
+    parsedTotal > 0;
   const remaining = partialValid
     ? Math.round((transaction.amount - parsedPartial) * 100) / 100
     : 0;
@@ -48,6 +58,11 @@ const SettlementDateModal: React.FC<SettlementDateModalProps> = ({
     if (mode === 'partial') {
       if (!partialValid) return;
       onConfirm(paidDate, parsedPartial);
+      return;
+    }
+    if (editableAmount) {
+      if (!totalValid) return;
+      onConfirm(paidDate, parsedTotal);
       return;
     }
     onConfirm(paidDate);
@@ -117,6 +132,35 @@ const SettlementDateModal: React.FC<SettlementDateModalProps> = ({
             </div>
           </div>
 
+          {mode === 'total' && editableAmount && (
+            <div>
+              <label className="block text-xs text-vybe-muted mb-1.5 font-medium">
+                Valor {isIncome ? 'recebido' : 'pago'}
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={totalValue}
+                onChange={(e) => setTotalValue(e.target.value)}
+                required
+                autoFocus
+                className="w-full bg-[#121212] border border-gray-700 rounded-lg py-3 px-3 text-white focus:outline-none focus:border-vybe-accent focus:ring-1 focus:ring-vybe-accent placeholder-gray-600"
+              />
+              <p className="text-[11px] text-gray-500 mt-1.5">
+                Lançamento pendente: {formatCurrency(transaction.amount)}. Confirme o valor real
+                {isIncome ? ' recebido' : ' pago'} neste mês.
+              </p>
+              {totalValid && parsedTotal !== transaction.amount && (
+                <p className="text-[11px] text-amber-400 mt-1">
+                  {parsedTotal < transaction.amount
+                    ? `Será baixa parcial; restam ${formatCurrency(transaction.amount - parsedTotal)} pendentes.`
+                    : `Valor confirmado acima do pendente (${formatCurrency(transaction.amount)}).`}
+                </p>
+              )}
+            </div>
+          )}
+
           {mode === 'partial' && (
             <div>
               <label className="block text-xs text-vybe-muted mb-1.5 font-medium">
@@ -175,7 +219,10 @@ const SettlementDateModal: React.FC<SettlementDateModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={mode === 'partial' && !partialValid}
+              disabled={
+                (mode === 'partial' && !partialValid) ||
+                (mode === 'total' && editableAmount && !totalValid)
+              }
               className="flex-1 py-2.5 rounded-lg bg-vybe-green text-white hover:bg-vybe-green/90 transition-colors text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {mode === 'partial' ? 'Confirmar baixa parcial' : 'Confirmar baixa'}

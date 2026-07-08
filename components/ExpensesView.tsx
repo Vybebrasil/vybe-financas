@@ -10,6 +10,7 @@ import {
 } from '../src/services/subscriptionBilling';
 import { Users, Plus, Trash2, Laptop, ShoppingBag, DollarSign, Eye, Pencil, X, Save, History, Pin, Ticket, CheckCircle, Clock } from 'lucide-react';
 import SubscriptionHistoryModal from './SubscriptionHistoryModal';
+import SubscriptionPayModal from './SubscriptionPayModal';
 import EmployeeValeModal from './EmployeeValeModal';
 import EmployeeSalaryPayModal from './EmployeeSalaryPayModal';
 import { useToast } from './ToastProvider';
@@ -60,6 +61,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
 
   // Subscription History State
   const [viewingHistorySub, setViewingHistorySub] = useState<Subscription | null>(null);
+  const [payingSubscription, setPayingSubscription] = useState<Subscription | null>(null);
 
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
@@ -275,16 +277,21 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   };
 
   const handlePaySub = (sub: Subscription) => {
-    onQuickExpense({
-      id: generateId(),
-      description: `Assinatura - ${sub.name}`,
-      amount: sub.cost,
-      category: Category.TOOLS,
-      type: TransactionType.EXPENSE,
-      date: new Date().toISOString().split('T')[0],
-      status: TransactionStatus.PAID,
-      paymentMethod: sub.paymentMethod,
-    });
+    setPayingSubscription(sub);
+  };
+
+  const handleConfirmSubscriptionPayment = async (
+    transactionId: string,
+    paidDate: string,
+    amount: number,
+  ) => {
+    if (!onToggleStatus) return;
+    await onToggleStatus(transactionId, paidDate, amount);
+  };
+
+  const handleAddSubscriptionPayment = async (payload: Omit<Transaction, 'id'>) => {
+    await onAddTransaction({ id: generateId(), ...payload });
+    toast.success('Pagamento registrado.');
   };
 
   const totalSubs = subscriptions.reduce((acc, curr) => acc + curr.cost, 0);
@@ -313,6 +320,16 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
         subscription={viewingHistorySub}
         transactions={transactions}
         onToggleStatus={onToggleStatus}
+      />
+
+      <SubscriptionPayModal
+        isOpen={!!payingSubscription}
+        subscription={payingSubscription}
+        transactions={transactions}
+        monthKey={monthKey}
+        onClose={() => setPayingSubscription(null)}
+        onSettlePending={handleConfirmSubscriptionPayment}
+        onAddPayment={handleAddSubscriptionPayment}
       />
 
       <EmployeeValeModal

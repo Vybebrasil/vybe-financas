@@ -102,6 +102,7 @@ const SubscriptionHistoryModal: React.FC<SubscriptionHistoryModalProps> = ({
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <SettlementDateModal
         transaction={settlingTransaction}
+        editableAmount
         onClose={() => setSettlingTransaction(null)}
         onConfirm={handleConfirmSettlement}
       />
