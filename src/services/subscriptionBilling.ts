@@ -206,3 +206,13 @@ export function getSubscriptionHistoryStats(
     transactionCount: subTransactions.length,
   };
 }
+
+/** Ordena assinaturas pelo dia de pagamento/renovação (1–31), depois pelo nome. */
+export function sortSubscriptionsByPaymentDay(subscriptions: Subscription[]): Subscription[] {
+  return [...subscriptions].sort((a, b) => {
+    const dayA = Number(a.renewalDay) || 31;
+    const dayB = Number(b.renewalDay) || 31;
+    if (dayA !== dayB) return dayA - dayB;
+    return a.name.localeCompare(b.name, 'pt-BR');
+  });
+}

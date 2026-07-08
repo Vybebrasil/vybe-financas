@@ -32,6 +32,7 @@ import {
   refreshTeamWorkspace,
 } from './workspace';
 import { listAuditLogs, logAudit } from './auditLog';
+import { sortSubscriptionsByPaymentDay } from './subscriptionBilling';
 
 export { clearWorkspaceCache };
 
@@ -777,10 +778,12 @@ export const api = {
       const { data, error } = await supabase
         .from('subscriptions')
         .select('*')
-        .eq('user_id', ownerId);
+        .eq('user_id', ownerId)
+        .order('renewal_day', { ascending: true })
+        .order('name', { ascending: true });
 
       if (error) throw error;
-      return (data ?? []).map(mapSubscriptionFromDB);
+      return sortSubscriptionsByPaymentDay((data ?? []).map(mapSubscriptionFromDB));
     },
 
     async create(subscription: Omit<Subscription, 'id'>) {

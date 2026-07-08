@@ -7,6 +7,7 @@ import {
   getSubscriptionBillingSnapshot,
   getSubscriptionMonthPaymentBadge,
   getSubscriptionPastDueTotal,
+  sortSubscriptionsByPaymentDay,
 } from '../src/services/subscriptionBilling';
 import { Users, Plus, Trash2, Laptop, ShoppingBag, DollarSign, Eye, Pencil, X, Save, History, Pin, Ticket, CheckCircle, Clock } from 'lucide-react';
 import SubscriptionHistoryModal from './SubscriptionHistoryModal';
@@ -297,12 +298,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   const totalSubs = subscriptions.reduce((acc, curr) => acc + curr.cost, 0);
 
   const sortedSubscriptions = useMemo(
-    () =>
-      [...subscriptions].sort((a, b) => {
-        const dayDiff = a.renewalDay - b.renewalDay;
-        if (dayDiff !== 0) return dayDiff;
-        return a.name.localeCompare(b.name, 'pt-BR');
-      }),
+    () => sortSubscriptionsByPaymentDay(subscriptions),
     [subscriptions],
   );
 
