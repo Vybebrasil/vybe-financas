@@ -129,3 +129,68 @@ export function getSubscriptionMonthPaymentBadge(snapshot: SubscriptionBillingSn
 
   return null;
 }
+
+export function getSubscriptionTransactions(
+  subscription: Subscription,
+  transactions: Transaction[],
+): Transaction[] {
+  return transactions
+    .filter((t) => matchesSubscription(subscription, t))
+    .sort((a, b) => getTransactionFilterDate(b).localeCompare(getTransactionFilterDate(a)));
+}
+
+export interface SubscriptionHistoryStats {
+  totalPaid: number;
+  paidThisMonth: number;
+  monthPending: number;
+  pastDue: number;
+  totalPending: number;
+  transactionCount: number;
+}
+
+export function getSubscriptionHistoryStats(
+  subscription: Subscription,
+  transactions: Transaction[],
+  monthKey = getCurrentMonthKey(),
+): SubscriptionHistoryStats {
+  const subTransactions = getSubscriptionTransactions(subscription, transactions);
+
+  const totalPaid = subTransactions
+    .filter((t) => t.status === TransactionStatus.PAID)
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const paidThisMonth = subTransactions
+    .filter(
+      (t) =>
+        t.status === TransactionStatus.PAID &&
+        getTransactionFilterDate(t).startsWith(monthKey),
+    )
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const pendingTxThisMonth = subTransactions
+    .filter(
+      (t) =>
+        t.status === TransactionStatus.PENDING &&
+        getTransactionFilterDate(t).startsWith(monthKey),
+    )
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const pastDue = getSubscriptionPastDueTotal(subscription, transactions, monthKey);
+  const snapshot = getSubscriptionBillingSnapshot(subscription, transactions, monthKey);
+
+  const monthPending =
+    pendingTxThisMonth > 0
+      ? pendingTxThisMonth
+      : snapshot.status === 'paid'
+        ? 0
+        : Math.max(subscription.cost - paidThisMonth, 0);
+
+  return {
+    totalPaid,
+    paidThisMonth,
+    monthPending,
+    pastDue,
+    totalPending: pastDue + monthPending,
+    transactionCount: subTransactions.length,
+  };
+}

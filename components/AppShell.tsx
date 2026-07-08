@@ -396,6 +396,7 @@ const AppShell: React.FC = () => {
               onQuickExpense={handleQuickExpense}
               onAddTransaction={handleAddTransaction}
               onViewEmployee={handleOpenEmployeeDetails}
+              onToggleStatus={handleToggleTransactionStatus}
             />
           </Suspense>
         )}

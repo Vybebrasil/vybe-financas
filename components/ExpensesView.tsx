@@ -26,6 +26,7 @@ interface ExpensesViewProps {
   onQuickExpense: (transaction: Transaction) => void;
   onAddTransaction: (transaction: Transaction) => Promise<void>;
   onViewEmployee?: (emp: Employee) => void;
+  onToggleStatus?: (id: string, paidDate?: string, partialAmount?: number) => void;
 }
 
 const ExpensesView: React.FC<ExpensesViewProps> = ({
@@ -40,6 +41,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
   onQuickExpense,
   onAddTransaction,
   onViewEmployee,
+  onToggleStatus,
 }) => {
   const toast = useToast();
   // State for forms
@@ -310,6 +312,7 @@ const ExpensesView: React.FC<ExpensesViewProps> = ({
         onClose={() => setViewingHistorySub(null)}
         subscription={viewingHistorySub}
         transactions={transactions}
+        onToggleStatus={onToggleStatus}
       />
 
       <EmployeeValeModal
